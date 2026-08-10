@@ -1,0 +1,10 @@
+# /etc/default/open303
+# Modifiez ces valeurs puis: sudo systemctl restart open303
+SAMPLE_RATE=44100
+BUFFER_FRAMES=640
+
+# Options supplementaires. Ajoutez "--rt" ici UNIQUEMENT si vous utilisez une
+# carte son USB (le scheduling temps reel peut causer des craquements sur la
+# sortie jack embarquee du Pi, cf README section Depannage). Laissez vide par
+# defaut.
+EXTRA_ARGS=

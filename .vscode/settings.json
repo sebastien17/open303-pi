@@ -1,0 +1,40 @@
+{
+  // IntelliSense se base sur compile_commands.json genere par CMake : il voit
+  // ainsi exactement les memes flags que le build, dont -include cstring
+  // -include climits, sans lesquels le code d'Open303 semble plein d'erreurs.
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build-wsl/compile_commands.json",
+  "C_Cpp.default.cppStandard": "c++17",
+
+  // build-wsl/ = compilation native x86 dans WSL (iteration rapide).
+  // build-cross/ = binaire arm64 pour le Pi, produit par docker/build-cross.sh.
+  "cmake.buildDirectory": "${workspaceFolder}/build-wsl",
+  "cmake.configureOnOpen": false,
+
+  "files.associations": {
+    "*.h": "cpp"
+  },
+
+  "search.exclude": {
+    "**/build-wsl": true,
+    "**/build-cross": true,
+    "**/third_party/Open303/Libraries": true,
+    "**/third_party/Open303/Build": true,
+    "**/.git": true
+  },
+  "files.watcherExclude": {
+    "**/build-wsl/**": true,
+    "**/build-cross/**": true,
+    "**/third_party/**": true
+  },
+
+  "[cpp]": {
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.detectIndentation": false
+  },
+  "[shellscript]": {
+    "editor.tabSize": 2
+  },
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true
+}

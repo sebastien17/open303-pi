@@ -1,0 +1,74 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Configurer (CMake natif)",
+      "type": "shell",
+      "command": "cmake -S . -B build-wsl -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release",
+      "detail": "Genere build-wsl/compile_commands.json, la source de verite d'IntelliSense.",
+      "problemMatcher": []
+    },
+    {
+      "label": "Compiler (natif WSL, x86)",
+      "type": "shell",
+      "command": "cmake --build build-wsl -j $(nproc)",
+      "detail": "Verification de compilation rapide, sans emulation. Le binaire est x86 : utile pour --sine et pour valider le code, pas pour le Pi.",
+      "group": { "kind": "build"},
+      "problemMatcher": ["$gcc"],
+      "dependsOn": ["Configurer (CMake natif)"]
+    },
+    {
+      "label": "Cross-compiler pour le Pi (Docker, arm64)",
+      "type": "shell",
+      "command": "./docker/build-cross.sh",
+      "detail": "Build officiel : conteneur Debian trixie arm64 via QEMU. Produit build-cross/open303_pi_host.",
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Deployer sur le Pi (scp)",
+      "type": "shell",
+      "command": "scp build-cross/open303_pi_host ${input:piHost}:~/",
+      "detail": "Transfere le binaire arm64 vers le Pi.",
+      "problemMatcher": []
+    },
+    {
+      "label": "Cross-compiler + deployer",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Cross-compiler pour le Pi (Docker, arm64)",
+        "Deployer sur le Pi (scp)"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Redemarrer le service sur le Pi",
+      "type": "shell",
+      "command": "ssh ${input:piHost} 'sudo systemctl restart open303.service && systemctl --no-pager status open303.service'",
+      "detail": "Apres deploiement, si vous utilisez l'unite systemd de systemd/.",
+      "problemMatcher": []
+    },
+    {
+      "label": "Journal du service sur le Pi",
+      "type": "shell",
+      "command": "ssh ${input:piHost} 'sudo journalctl -u open303.service -f'",
+      "detail": "Logs en direct : c'est la qu'apparaissent les xruns et les evenements MIDI perdus.",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Nettoyer build-wsl",
+      "type": "shell",
+      "command": "rm -rf build-wsl",
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "piHost",
+      "type": "promptString",
+      "description": "Cible SSH du Raspberry Pi",
+      "default": "pi@raspberrypi.local"
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Debug du binaire x86 natif, dans WSL.
+      // WSL n'expose pas de peripherique MIDI USB par defaut : le programme
+      // s'arretera sur "Aucun port MIDI trouve" sauf si vous avez attache le
+      // controleur avec usbipd-win. Reste utile pour poser des points d'arret
+      // sur le parsing d'arguments, l'init du moteur et la file MIDI.
+      "name": "WSL natif (x86)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build-wsl/open303_pi_host",
+      "args": ["44100", "256", "--sine"],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "preLaunchTask": "Compiler (natif WSL, x86)",
+      "setupCommands": [
+        {
+          "description": "Affichage lisible des conteneurs STL",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      // Debug du vrai binaire, sur le vrai materiel : la seule config qui
+      // permet de voir les xruns et le comportement audio reel.
+      //
+      // Prerequis cote WSL :  sudo apt install gdb-multiarch
+      // Sur le Pi :           sudo apt install gdbserver
+      //                       gdbserver :2345 ./open303_pi_host 44100 256
+      //
+      // Le binaire doit porter ses symboles : passez CMAKE_BUILD_TYPE a
+      // RelWithDebInfo dans docker/build-cross.sh avant de cross-compiler.
+      "name": "Distant : Raspberry Pi (gdbserver)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build-cross/open303_pi_host",
+      "miDebuggerServerAddress": "raspberrypi.local:2345",
+      "miDebuggerPath": "/usr/bin/gdb-multiarch",
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Affichage lisible des conteneurs STL",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    }
+  ]
+}

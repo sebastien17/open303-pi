@@ -1,0 +1,31 @@
+[Unit]
+Description=Open303 (hote MIDI USB -> DSP 303) 
+# On attend que le sous-systeme son soit pret ; le reste (attente du
+# controleur MIDI USB) est gere par Restart= ci-dessous + la regle udev
+# fournie (99-open303-midi.rules) qui redemarre le service des qu'un
+# peripherique MIDI USB est branche.
+After=sound.target network.target
+
+[Service]
+Type=simple
+User=open303
+Group=audio
+SupplementaryGroups=audio
+
+EnvironmentFile=-/etc/default/open303
+ExecStart=/usr/local/bin/open303_pi_host ${SAMPLE_RATE} ${BUFFER_FRAMES} ${EXTRA_ARGS}
+
+# Redemarre automatiquement si aucun port MIDI n'est trouve au lancement
+# (ex: Digitakt pas encore branche) ou en cas de crash/xrun fatal.
+Restart=on-failure
+RestartSec=3
+
+# Priorite temps reel : necessaire pour que RTAUDIO_SCHEDULE_REALTIME
+# fonctionne sans lancer le service en root.
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+AmbientCapabilities=CAP_SYS_NICE
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

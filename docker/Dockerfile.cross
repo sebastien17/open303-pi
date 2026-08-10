@@ -1,0 +1,15 @@
+# Image de "cross-compilation par emulation" : on installe les memes paquets
+# que sur le Raspberry Pi mais dans un conteneur ARM execute via QEMU sur une
+# machine x86. IMPORTANT : cette image DOIT correspondre a la version de
+# Debian qui tourne reellement sur le Pi (verifiez avec `cat /etc/os-release`
+# sur le Pi), sinon les versions de librtaudio/librtmidi/libasound ne
+# correspondront pas (erreurs "librtaudio.so.X => not found" a l'execution).
+# Ici : Debian 13 (trixie).
+FROM debian:trixie-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential cmake git pkg-config ca-certificates \
+      librtaudio-dev librtmidi-dev libasound2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src

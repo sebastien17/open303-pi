@@ -1,0 +1,10 @@
+[Unit]
+Description=Redemarre open303.service suite a la detection d'un peripherique MIDI USB
+# Evite les redemarrages en boucle si plusieurs sous-peripheriques MIDI
+# apparaissent en rafale (ex: un seul controleur expose plusieurs ports).
+StartLimitIntervalSec=5
+StartLimitBurst=1
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl try-restart open303.service

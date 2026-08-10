@@ -1,0 +1,5 @@
+# Redemarre open303.service des qu'un peripherique MIDI (ex: Digitakt en USB)
+# apparait, plutot que d'attendre le prochain essai de Restart= (jusqu'a 3s).
+# Utile aussi si vous debranchez/rebranchez le controleur sans reboot.
+ACTION=="add", SUBSYSTEM=="sound", KERNEL=="midiC[0-9]*", \
+  TAG+="systemd", ENV{SYSTEMD_WANTS}+="open303-restart.service"
