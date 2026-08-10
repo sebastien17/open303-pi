@@ -232,6 +232,36 @@ int audioCallback(void* outputBuffer, void* /*inputBuffer*/, unsigned int nFrame
   return 0;
 }
 
+void printUsage(const char* progName) {
+  std::printf(
+      "Usage: %s [sample_rate] [buffer_frames] [options]\n"
+      "\n"
+      "Hote MIDI USB standalone pour le moteur DSP Open303 (clone TB-303).\n"
+      "\n"
+      "Arguments positionnels (optionnels, dans cet ordre) :\n"
+      "  sample_rate      Frequence d'echantillonnage en Hz (defaut: 44100)\n"
+      "  buffer_frames    Taille de buffer audio en frames (defaut: 256 ;\n"
+      "                   sur Pi 3B+, ne descendez sous 128 qu'en l'absence\n"
+      "                   de xruns, cf README section 5bis)\n"
+      "\n"
+      "Options :\n"
+      "  --rt             Active le scheduling temps reel. Deconseille sur la\n"
+      "                   sortie jack embarquee de certains Pi (driver bcm2835),\n"
+      "                   generalement benefique avec une carte son USB.\n"
+      "                   Cf README section Depannage.\n"
+      "  --sine           Remplace Open303 par un sinus 440 Hz de diagnostic,\n"
+      "                   utile pour isoler un souci audio du moteur DSP.\n"
+      "  --channel N      Filtre les evenements MIDI recus sur le canal N\n"
+      "                   (0-15). Par defaut : tous les canaux sont ecoutes.\n"
+      "  -h, --help       Affiche cette aide et quitte.\n"
+      "\n"
+      "Exemples :\n"
+      "  %s\n"
+      "  %s 44100 128 --rt\n"
+      "  %s 48000 256 --channel 0\n",
+      progName, progName, progName, progName);
+}
+
 int pickMidiPort(RtMidiIn& midiin) {
   unsigned int nPorts = midiin.getPortCount();
   if (nPorts == 0) {
@@ -262,7 +292,10 @@ int main(int argc, char** argv) {
   // "--sine" dans std::atof, qui renvoie silencieusement 0.0.
   int positionalIndex = 0;
   for (int i = 1; i < argc; ++i) {
-    if (std::strcmp(argv[i], "--sine") == 0) {
+    if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
+      printUsage(argv[0]);
+      return 0;
+    } else if (std::strcmp(argv[i], "--sine") == 0) {
       gSineTestMode = true;
       std::printf("Mode diagnostic: sinus 440 Hz (bypass Open303)\n");
     } else if (std::strcmp(argv[i], "--rt") == 0) {
