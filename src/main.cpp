@@ -272,7 +272,18 @@ int pickMidiPort(RtMidiIn& midiin) {
   for (unsigned int i = 0; i < nPorts; ++i) {
     std::printf("  [%u] %s\n", i, midiin.getPortName(i).c_str());
   }
-  // Par defaut on prend le premier port USB trouve.
+  // "Midi Through" est un port virtuel cree par le noyau ALSA, toujours
+  // present en position 0, et ne correspond a aucun materiel branche. Le
+  // prendre par defaut (comme le faisait un simple "return 0") revient a
+  // ignorer silencieusement le vrai controleur USB des qu'il en existe un.
+  // On prend donc le premier port qui n'est PAS "Midi Through".
+  for (unsigned int i = 0; i < nPorts; ++i) {
+    if (midiin.getPortName(i).find("Midi Through") == std::string::npos) {
+      return static_cast<int>(i);
+    }
+  }
+  // Rien d'autre que des ports "Midi Through" : on s'y connecte quand meme,
+  // au cas ou un logiciel MIDI local y enverrait des evenements via ALSA.
   return 0;
 }
 
