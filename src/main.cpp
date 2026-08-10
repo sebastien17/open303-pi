@@ -148,6 +148,57 @@ void applyMidiEvent(const MidiEvent& ev) {
         case 70:  // Waveform (0 = saw, 1 = square, cf doc Open303)
           gSynth.setWaveform(v01);
           break;
+
+        // CC20-27 : plage "undefined" du spec MIDI 1.0 (aucune collision avec
+        // un usage standard), utilisee pour les parametres Open303 restants
+        // qui sont RT-safe (simples mises a jour de coefficient, pas de
+        // reallocation ni de recalcul de table). setSquarePhaseShift,
+        // setTanhShaperDrive et setTanhShaperOffset sont volontairement
+        // EXCLUS d'ici : ils regenerent la wavetable mip-mappee entiere
+        // (fillWithSquare303 -> generateMipMap, FFT) a chaque appel, ce qui
+        // depuis ce thread audio provoquerait le meme type de craquement que
+        // l'ancienne inversion de priorite (cf recap-open303-pi.md). Ils sont
+        // reglables uniquement au demarrage via --square-phase/--tanh-drive/
+        // --tanh-offset (cf --help).
+        case 20:  // Attaque enveloppe filtre, notes non accentuees (ms).
+                  // Plage Devil Fish : 0.3-30 ms (defaut moteur : 3 ms).
+          gSynth.setNormalAttack(0.3 + 29.7 * v01);
+          break;
+        case 21:  // Attaque enveloppe filtre, notes accentuees (ms). Sur le
+                  // 303 d'origine, fixe a 3 ms ; ici reglable comme sur la
+                  // Devil Fish (meme plage 0.3-30 ms).
+          gSynth.setAccentAttack(0.3 + 29.7 * v01);
+          break;
+        case 22:  // Highpass avant le filtre principal (Hz). Defaut moteur :
+                  // ~44.5 Hz.
+          gSynth.setPreFilterHighpass(500.0 * v01);
+          break;
+        case 23:  // Highpass dans la boucle de feedback du filtre (Hz).
+                  // Defaut moteur : 150 Hz.
+          gSynth.setFeedbackHighpass(500.0 * v01);
+          break;
+        case 24:  // Highpass apres le filtre principal (Hz). Defaut moteur :
+                  // ~24.2 Hz.
+          gSynth.setPostFilterHighpass(500.0 * v01);
+          break;
+        case 25:  // Sustain de l'enveloppe d'amplitude (dB). Sur le 303
+                  // d'origine, fixe a 0 (silence, enveloppe percussive) ;
+                  // la Devil Fish l'ouvre en pourcentage du volume plein.
+                  // Ici : -60 dB (quasi silence) .. 0 dB (plein volume tenu).
+          gSynth.setAmpSustain(-60.0 + 60.0 * v01);
+          break;
+        case 26:  // Decay de l'enveloppe d'amplitude (ms). Plage Devil Fish :
+                  // 16-3000 ms (defaut moteur : ~1230 ms).
+          gSynth.setAmpDecay(16.0 + 2984.0 * v01);
+          break;
+        case 27:  // Release de l'enveloppe d'amplitude (ms), notes non
+                  // accentuees uniquement (pas de setter public pour le
+                  // release des notes accentuees). Defaut moteur tres court
+                  // (~1 ms, comportement percussif d'origine) ; plage choisie
+                  // 1-500 ms pour un balayage musicalement utile.
+          gSynth.setAmpRelease(1.0 + 499.0 * v01);
+          break;
+
         default:
           break;  // CC non mappe : ignore
       }
@@ -253,6 +304,14 @@ void printUsage(const char* progName) {
       "                   utile pour isoler un souci audio du moteur DSP.\n"
       "  --channel N      Filtre les evenements MIDI recus sur le canal N\n"
       "                   (0-15). Par defaut : tous les canaux sont ecoutes.\n"
+      "  --square-phase D Dephasage de l'onde carree par rapport au saw, en\n"
+      "                   degres (defaut: 180). Reglable uniquement ici (pas\n"
+      "                   de CC) : regenere la wavetable, trop couteux pour\n"
+      "                   etre appele depuis le thread audio.\n"
+      "  --tanh-drive DB  Drive (dB) du shaper tanh de l'onde carree 303\n"
+      "                   (defaut: 36.9). Meme contrainte que --square-phase.\n"
+      "  --tanh-offset V  Offset DC du shaper tanh de l'onde carree 303\n"
+      "                   (defaut: 4.37). Meme contrainte que --square-phase.\n"
       "  -h, --help       Affiche cette aide et quitte.\n"
       "\n"
       "Exemples :\n"
@@ -298,6 +357,12 @@ int main(int argc, char** argv) {
   // (cf README, section reglages specifiques Pi 3B+).
   unsigned int bufferFrames = 256;
 
+  // Valeurs par defaut du moteur (rosic::MipMappedWaveTable) : reprises ici
+  // telles quelles pour que ne rien passer sur ces flags soit un no-op.
+  double squarePhaseShift = 180.0;
+  double tanhShaperDrive  = 36.9;
+  double tanhShaperOffset = 4.37;
+
   // Args positionnels (sampleRate, bufferFrames) et flags (--xxx) sont
   // distingues explicitement : sans ca, "open303_pi_host --sine" envoyait
   // "--sine" dans std::atof, qui renvoie silencieusement 0.0.
@@ -324,6 +389,24 @@ int main(int argc, char** argv) {
       }
       gMidiChannel = channel;
       std::printf("Canal MIDI filtre: %d\n", gMidiChannel);
+    } else if (std::strcmp(argv[i], "--square-phase") == 0) {
+      if (++i >= argc) {
+        std::fprintf(stderr, "--square-phase attend une valeur en degres\n");
+        return 1;
+      }
+      squarePhaseShift = std::atof(argv[i]);
+    } else if (std::strcmp(argv[i], "--tanh-drive") == 0) {
+      if (++i >= argc) {
+        std::fprintf(stderr, "--tanh-drive attend une valeur en dB\n");
+        return 1;
+      }
+      tanhShaperDrive = std::atof(argv[i]);
+    } else if (std::strcmp(argv[i], "--tanh-offset") == 0) {
+      if (++i >= argc) {
+        std::fprintf(stderr, "--tanh-offset attend une valeur\n");
+        return 1;
+      }
+      tanhShaperOffset = std::atof(argv[i]);
     } else if (positionalIndex == 0) {
       sampleRate = std::atof(argv[i]);
       if (sampleRate <= 0.0) {
@@ -361,6 +444,13 @@ int main(int argc, char** argv) {
   gSynth.setAccent(50.0);      // 50 %
   gSynth.setVolume(-6.0);      // dB
   gSynth.setWaveform(0.0);     // saw
+
+  // Parametres "back-panel" qui regenerent la wavetable mip-mappee a chaque
+  // appel (FFT) : appliques ici une seule fois, avant l'ouverture du flux
+  // audio, jamais depuis le thread audio (cf --help et applyMidiEvent()).
+  gSynth.setSquarePhaseShift(squarePhaseShift);
+  gSynth.setTanhShaperDrive(tanhShaperDrive);
+  gSynth.setTanhShaperOffset(tanhShaperOffset);
 
   // --- Ouverture du port MIDI USB ---
   RtMidiIn midiin;

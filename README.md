@@ -222,22 +222,45 @@ Pi 4/5. Quelques ajustements par rapport au reste du guide :
 | CC70                | Waveform (saw/square)     |
 | CC5 (portamento time) | Temps de slide (5-500 ms, defaut moteur: 60 ms) |
 | Pitch bend           | +/- 2 demi-tons           |
+| CC20                 | Attaque enveloppe filtre, notes non accentuees (0.3-30 ms) |
+| CC21                 | Attaque enveloppe filtre, notes accentuees (0.3-30 ms) |
+| CC22                 | Highpass avant le filtre principal (0-500 Hz) |
+| CC23                 | Highpass dans la boucle de feedback du filtre (0-500 Hz) |
+| CC24                 | Highpass apres le filtre principal (0-500 Hz) |
+| CC25                 | Sustain de l'enveloppe d'amplitude (-60-0 dB) |
+| CC26                 | Decay de l'enveloppe d'amplitude (16-3000 ms) |
+| CC27                 | Release de l'enveloppe d'amplitude, notes non accentuees (1-500 ms) |
 
 **Accent et slide n'ont rien a mapper** : le moteur les gere lui-meme dans
 `Open303::noteOn()`.
 - **Accent** : declenche automatiquement par une **velocite >= 100**. Il bascule
-  l'enveloppe de filtre sur `accentDecay` (200 ms) et ajoute `accentGain` au
-  gain de l'enveloppe d'amplitude.
+  l'enveloppe de filtre sur `accentDecay` (200 ms, fixe - non reglable en CC)
+  et ajoute `accentGain` au gain de l'enveloppe d'amplitude. **CC26 (decay) et
+  CC73 (decay filtre) n'ont donc aucun effet sur une note accentuee**, seule
+  la vitesse < 100 les rend audibles.
 - **Slide** : declenche par le **legato**. Tant qu'une note est encore tenue,
   la suivante ne retrigge pas l'enveloppe mais glisse en pitch
   (`slideToNote`, 60 ms par defaut comme sur le 303). Sur le Digitakt : notes
   qui se recouvrent = slide.
 
-Les autres parametres (tuning, attaques/decays separes pour notes accentuees,
-highpass avant/apres filtre...) peuvent etre ajoutes de la meme facon dans
-`applyMidiEvent()` en appelant les setters correspondants de `rosic::Open303`
-(voir `Source/DSPCode/rosic_Open303.h` pour la liste complete : `setTuning`,
-`setAccentDecay`, etc.).
+**CC20-27 choisis dans la plage "undefined" du spec MIDI 1.0** (aucune
+collision avec un usage standard), cf commentaires dans `applyMidiEvent()`
+(`src/main.cpp`) pour le detail de chaque plage.
+
+`setSquarePhaseShift`, `setTanhShaperDrive` et `setTanhShaperOffset` sont
+**volontairement absents de tout mapping CC** : ils regenerent la wavetable
+mip-mappee entiere (FFT) a chaque appel, ce qui depuis le thread audio
+provoquerait des craquements (meme categorie de bug que l'ancienne inversion
+de priorite MIDI/audio, cf `recap-open303-pi.md`). Reglables uniquement au
+demarrage via `--square-phase`, `--tanh-drive`, `--tanh-offset` (`--help`
+pour le detail).
+
+D'autres parametres (tuning, `setAccentDecay`...) peuvent etre ajoutes de la
+meme facon dans `applyMidiEvent()` en appelant les setters correspondants de
+`rosic::Open303` (voir `Source/DSPCode/rosic_Open303.h` pour la liste
+complete) — en verifiant au prealable, comme pour les trois ci-dessus, que le
+setter ne fait rien de couteux (allocation, FFT) qui serait dangereux appele
+depuis le thread audio.
 
 > **Attention aux unites** : `setEnvMod`, `setResonance` et `setAccent`
 > attendent des **pourcentages (0..100)**, pas une valeur normalisee 0..1

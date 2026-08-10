@@ -107,10 +107,47 @@ normale/accent) → `instCutoff = cutoff · 2^(envScaler·(rc1−envOffset) + ac
 `AcidSequencer` reste délibérément inutilisé (séquenceur MIDI externe via le Digitakt, cf
 mémoire projet).
 
+## Validé à l'oreille sur le Pi (Digitakt II, RASP303)
+
+Service systemd installé et stable, Digitakt détecté automatiquement au branchement (règle udev).
+Deux bugs trouvés et corrigés pendant cette validation :
+
+16. **`pickMidiPort()` retournait toujours `0`.** Malgré le commentaire "on prend le premier
+    port USB trouvé", c'était un `return 0;` en dur. `Midi Through` (port virtuel ALSA, toujours
+    présent en position 0) était donc systématiquement choisi au lieu du Digitakt — silencieux,
+    aucune erreur, juste aucune note qui n'arrivait jamais. Corrigé : premier port dont le nom ne
+    contient pas "Midi Through".
+17. **`EXTRA_ARGS` vide passé comme argument vide au binaire.** `systemd/open303.service` utilisait
+    `${EXTRA_ARGS}` (accolades) dans `ExecStart` : en systemd, cette syntaxe génère toujours un
+    argument, même vide, contrairement à `$EXTRA_ARGS` (sans accolades) qui disparaît entièrement
+    si la variable est vide. Avec `EXTRA_ARGS=` vide par défaut, le service passait un argument
+    `""` au binaire, rejeté par le parsing (`Argument inattendu:`) → boucle de redémarrage infinie.
+
+Confirmé au clavier : cutoff, résonance, env mod, accent (vélocité ≥ 100), decay (uniquement sur
+notes non accentuées — normal, `accentDecay` est fixe à 200 ms), volume, waveform, slide (CC5 +
+legato). `--rt` craque sur la sortie jack/HDMI embarquée du Pi, comme prévu par le README — pas
+testé avec une carte son USB.
+
+## CC supplémentaires ajoutés (paramètres "back-panel" d'Open303)
+
+18. **8 nouveaux CC RT-safe**, plage "undefined" du spec MIDI 1.0 (CC20-27) : attaque filtre
+    normale/accentuée (CC20/21), highpass avant/feedback/après filtre (CC22/23/24), sustain/decay/
+    release de l'enveloppe d'ampli (CC25/26/27). Détail des plages en commentaire dans
+    `applyMidiEvent()` (`src/main.cpp`) et dans le tableau du README section 7.
+19. **3 paramètres volontairement exclus du mapping CC** : `setSquarePhaseShift`,
+    `setTanhShaperDrive`, `setTanhShaperOffset` appellent tous `fillWithSquare303()` →
+    `generateMipMap()` (régénération FFT de la wavetable) à chaque appel. Les brancher sur un CC
+    aurait réintroduit, depuis le thread audio, le même type de problème que l'ancienne inversion
+    de priorité (point 2 plus haut) — craquements garantis en tournant le knob. Reglables
+    uniquement au démarrage via `--square-phase`/`--tanh-drive`/`--tanh-offset` (appliqués avant
+    l'ouverture du flux audio, donc hors thread RT).
+
+Pas encore testés à l'oreille (CC20-27 ni les 3 flags CLI) : à valider sur le Pi à l'occasion.
+
 ## Reste à faire
 
-Rien d'identifié pour l'instant au-delà de la validation à l'oreille sur le Pi (section
-suivante).
+Rien d'identifié pour l'instant au-delà de la validation à l'oreille des CC20-27 et des 3
+nouveaux flags CLI (section précédente).
 
 ## À valider à l'oreille sur le Pi
 
