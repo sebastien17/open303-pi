@@ -230,6 +230,8 @@ Pi 4/5. Quelques ajustements par rapport au reste du guide :
 | CC25                 | Sustain de l'enveloppe d'amplitude (-60-0 dB) |
 | CC26                 | Decay de l'enveloppe d'amplitude (16-3000 ms) |
 | CC27                 | Release de l'enveloppe d'amplitude, notes non accentuees (1-500 ms) |
+| CC28                 | Tuning, reference La4 (415-466 Hz, defaut: 440 Hz) |
+| CC29                 | Intensite de l'accent (0-100%, defaut: 50%) — distinct du declenchement (velocite >= 100) |
 
 **Accent et slide n'ont rien a mapper** : le moteur les gere lui-meme dans
 `Open303::noteOn()`.

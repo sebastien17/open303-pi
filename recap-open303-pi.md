@@ -142,11 +142,20 @@ testé avec une carte son USB.
     uniquement au démarrage via `--square-phase`/`--tanh-drive`/`--tanh-offset` (appliqués avant
     l'ouverture du flux audio, donc hors thread RT).
 
-Pas encore testés à l'oreille (CC20-27 ni les 3 flags CLI) : à valider sur le Pi à l'occasion.
+20. **CC28/29 ajoutés (Tuning, Accent).** En comparant au panneau d'un TD-3-MO (clone 303 modded),
+    deux knobs classiques du 303 restaient non exposés malgré des setters triviaux et RT-safe :
+    `setTuning` (CC28, 415-466 Hz autour de 440 Hz) et `setAccent` — l'**intensité** de l'accent,
+    distincte de son déclenchement par vélocité déjà géré par le moteur (CC29, 0-100%).
+    Les autres extras du TD-3-MO (Soft Attack, Filter Tracking, Overdrive, Filter FM, Sweep,
+    Muffler, Sub Osc) sont des ajouts "mod" propres au hardware Behringer, sans équivalent dans
+    `rosic::Open303` (qui modélise le 303 d'origine) : pas mappables sans écrire du nouveau code
+    DSP dans le moteur, hors de portée d'un simple ajout de CC.
+
+Pas encore testés à l'oreille (CC20-29 ni les 3 flags CLI) : à valider sur le Pi à l'occasion.
 
 ## Reste à faire
 
-Rien d'identifié pour l'instant au-delà de la validation à l'oreille des CC20-27 et des 3
+Rien d'identifié pour l'instant au-delà de la validation à l'oreille des CC20-29 et des 3
 nouveaux flags CLI (section précédente).
 
 ## À valider à l'oreille sur le Pi

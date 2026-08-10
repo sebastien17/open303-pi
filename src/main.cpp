@@ -198,6 +198,16 @@ void applyMidiEvent(const MidiEvent& ev) {
                   // 1-500 ms pour un balayage musicalement utile.
           gSynth.setAmpRelease(1.0 + 499.0 * v01);
           break;
+        case 28:  // Tuning, frequence de reference de La4 (Hz). Plage
+                  // +/-1 demi-ton autour de 440 Hz (defaut moteur : 440 Hz),
+                  // comme un knob de tune classique.
+          gSynth.setTuning(415.0 + 51.0 * v01);
+          break;
+        case 29:  // Intensite de l'accent (%), distincte du DECLENCHEMENT de
+                  // l'accent (vélocite >= 100, deja gere par le moteur sans
+                  // mapping). Defaut moteur : 50%.
+          gSynth.setAccent(100.0 * v01);
+          break;
 
         default:
           break;  // CC non mappe : ignore
