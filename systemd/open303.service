@@ -13,7 +13,7 @@ Group=audio
 SupplementaryGroups=audio
 
 EnvironmentFile=-/etc/default/open303
-ExecStart=/usr/local/bin/open303_pi_host ${SAMPLE_RATE} ${BUFFER_FRAMES} ${EXTRA_ARGS}
+ExecStart=/usr/local/bin/open303_pi_host ${SAMPLE_RATE} ${BUFFER_FRAMES} $EXTRA_ARGS
 
 # Redemarre automatiquement si aucun port MIDI n'est trouve au lancement
 # (ex: Digitakt pas encore branche) ou en cas de crash/xrun fatal.
