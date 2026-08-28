@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>open303-pi // control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #0b0f0a;
@@ -27,12 +30,16 @@
     max-width: 720px;
     margin: 0 auto;
   }
-  pre.banner {
+  .banner {
+    font-family: "VT323", "Courier New", Courier, monospace;
     color: var(--fg-bright);
     text-align: center;
-    margin: 0 0 8px;
-    font-size: 12px;
-    line-height: 1.1;
+    margin: 0 0 4px;
+    font-size: clamp(32px, 11vw, 64px);
+    line-height: 1;
+    white-space: nowrap;
+    letter-spacing: 6px;
+    text-shadow: 0 0 8px rgba(170, 255, 187, 0.6);
   }
   .subtitle {
     text-align: center;
@@ -112,12 +119,7 @@
 </head>
 <body>
   <div class="crt">
-    <pre class="banner">
- ___  ____  ____  _  _  ____  ____  ____     ____  __
-/ __)(  _ \(  __)( \( )(_  _)(  _ \(_  _)   (  _ \(  )
-\__ \ )___/ ) _)  )  (   )(   )___/ _)(_     )___/ )(
-(___/(__)  (____)(_)\_) (__) (__)  (____)   (__)  (__)
-    </pre>
+    <div class="banner">OPEN303-PI</div>
     <div class="subtitle">:: PANNEAU DE CONTROLE ::<span class="cursor"></span></div>
 
     <div class="box" data-title="ETAT ACTUEL">
