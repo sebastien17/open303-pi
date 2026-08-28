@@ -182,6 +182,29 @@ silencieusement sur ce Pi, `sed` y perdant les backslashes) : sortie `KT USB Aud
 les logs, `--rt` actif sans craquement sur cet adaptateur, notes séparées, legato/slide (glissando
 continu sur chevauchement), accent, note tenue longue — tout confirmé bon à l'oreille.
 
+## Tests de latence (RASP303, adaptateur UGREEN, `--rt`)
+
+Balayage de `BUFFER_FRAMES` (256/128/64/32) avec notes jouées à chaque palier, puis un test plus
+exigeant à la taille la plus basse (note tenue + balayage continu cutoff/résonance pendant la
+lecture, le scénario "craquements" du README) :
+
+| BUFFER_FRAMES demandé | Buffer réel négocié | Latence nominale | Xruns |
+|---|---|---|---|
+| 256 | 256 | 5,8 ms | Aucun |
+| 128 | 128 | 2,9 ms | Aucun |
+| 64  | 64  | 1,5 ms | Aucun |
+| 32  | 45 (ajusté par ALSA) | 1,0 ms | Aucun, même sous charge (CC en rafale) |
+
+Température stable ~54°C, pas de throttling actif pendant les tests. `/etc/default/open303` de ce
+Pi réglé sur `BUFFER_FRAMES=64` (marge par rapport au minimum testé de 45, tout en restant très en
+dessous des 256 par défaut recommandées dans le README pour un 3B+). Le template
+`systemd/open303.default` du dépôt (640, conservateur) n'a volontairement pas été changé : ce
+résultat est spécifique à ce Pi + cet adaptateur + `--rt`, pas une garantie générale.
+
+Note méthodologique : les notes/CC ont été injectées via `aseqsend` (port ALSA `Midi Through`),
+donc sans la latence/gigue USB du vrai Digitakt — à garder en tête en comparant au ressenti réel
+au clavier.
+
 ## Reste à faire
 
 Valider à l'oreille les CC20-29 et les 3 flags CLI (`--square-phase`/`--tanh-drive`/
