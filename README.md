@@ -317,20 +317,60 @@ editez `/etc/default/open303` puis `sudo systemctl restart open303`.
   `EXTRA_ARGS` ci-dessus) pour filtrer sur le canal de la piste MIDI dediee
   au 303 sur le Digitakt.
 
+## 7ter. MIDI sans fil (rtpmidid)
+
+[rtpmidid](https://github.com/davidmoreno/rtpmidid) implemente le protocole
+RTP-MIDI (AppleMIDI) : il permet a un DAW, un iPad (GarageBand...) ou une
+autre machine sur le meme reseau local d'envoyer du MIDI au Pi sans fil,
+sans materiel USB. Pas empaquete dans les depots Debian, mais le projet
+publie des `.deb` precompiles par version de Debian :
+
+```bash
+curl -fL -o /tmp/rtpmidid.deb \
+  https://github.com/davidmoreno/rtpmidid/releases/download/v26.01/rtpmidid-debian-trixie-arm64-26.01.deb
+sudo apt install -y /tmp/rtpmidid.deb
+```
+
+(adaptez le nom de fichier a votre version de Debian et a la derniere
+release — `curl -s https://api.github.com/repos/davidmoreno/rtpmidid/releases/latest`
+liste les assets disponibles).
+
+Une fois installe et demarre (`rtpmidid.service`, active par defaut),
+rtpmidid annonce ce Pi en mDNS/Bonjour sous son nom d'hote, port 5004, et
+exporte automatiquement le port ALSA `Midi Through` vers le reseau
+(configuration par defaut dans `/etc/rtpmidid/default.ini`, sections
+`[rtpmidi_announce]` et `[alsa_hw_auto_export]`) : n'importe quel logiciel
+RTP-MIDI du reseau peut alors s'y connecter et jouer directement le 303,
+sans rien reconfigurer cote Pi. C'est le meme port `Midi Through` que le
+programme utilise deja par defaut en l'absence de controleur USB.
+
+**Attention** : rtpmidid cree aussi deux ports ALSA a lui (`rtpmidid:Network
+Export`, `rtpmidid:Announcements`) qui apparaissent dans `--list-midi-ports`
+mais sont sa plomberie interne — s'y connecter directement (via
+`--midi-port`) ne recoit rien, verifie empiriquement. Utilisez `--midi-port`
+pour forcer un controleur USB precis par nom (ex: `--midi-port Digitakt`)
+ou laissez la selection automatique par defaut, qui gere deja correctement
+le choix entre USB et `Midi Through` (donc le reseau).
+
 ## 8. Interface web de pilotage (optionnel)
 
-Petite page web pour changer le canal MIDI ecoute et le peripherique de
-sortie audio sans taper de commande — pratique une fois le Pi installe sans
-ecran/clavier branches. Ne touche jamais au binaire audio directement : elle
-reecrit `/etc/default/open303` et redemarre `open303.service` (via un script
-`sudo` scope a cette seule action).
+Petite page web pour changer le canal MIDI ecoute, le port MIDI d'entree
+(USB ou reseau/rtpmidid) et le peripherique de sortie audio sans taper de
+commande — pratique une fois le Pi installe sans ecran/clavier branches. Ne
+touche jamais au binaire audio directement : elle reecrit
+`/etc/default/open303` et redemarre `open303.service` (via un script `sudo`
+scope a cette seule action).
 
-Deux nouveaux flags CLI la rendent possible :
+Quatre nouveaux flags CLI la rendent possible :
 - `--audio-device SOUS-CHAINE` : force la sortie audio dont le nom contient
   cette sous-chaine (ex: `--audio-device USB`). Sans correspondance, repli
   sur la selection automatique (cf section 6) avec un avertissement.
 - `--list-devices` : affiche les peripheriques audio disponibles (memes noms
   que ceux vus au demarrage normal) et quitte, sans ouvrir MIDI ni audio.
+- `--midi-port SOUS-CHAINE` : force le port MIDI dont le nom contient cette
+  sous-chaine (ex: `--midi-port Digitakt`). Sans correspondance, repli sur la
+  selection automatique (cf section 7ter) avec un avertissement.
+- `--list-midi-ports` : affiche les ports MIDI disponibles et quitte.
 
 **Installation** (apres `systemd/install-service.sh`, sur le Pi) :
 ```bash

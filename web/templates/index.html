@@ -121,6 +121,8 @@
 
     <div class="box" data-title="STATUS">
       <div class="row"><span>midi channel</span><span class="val">{{ "ALL" if channel is none else channel }}</span></div>
+      <div class="row"><span>midi port (config)</span><span class="val">{{ midi_port if midi_port else "auto" }}</span></div>
+      <div class="row"><span>midi port (active)</span><span class="val">{{ active_midi_port if active_midi_port else "?" }}</span></div>
       <div class="row"><span>audio output (config)</span><span class="val">{{ audio_device if audio_device else "auto" }}</span></div>
       <div class="row"><span>audio output (active)</span><span class="val">{{ active_device if active_device else "?" }}</span></div>
     </div>
@@ -131,6 +133,14 @@
         <option value="all" {{ "selected" if channel is none }}>all channels</option>
         {% for n in range(16) %}
         <option value="{{ n }}" {{ "selected" if channel == n }}>channel {{ n }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="midi_port">midi input (usb or rtpmidid/wifi)</label>
+      <select name="midi_port" id="midi_port">
+        <option value="" {{ "selected" if not midi_port }}>auto (prefers a real USB controller)</option>
+        {% for p in midi_ports %}
+        <option value="{{ p }}" {{ "selected" if p == midi_port }}>{{ p }}</option>
         {% endfor %}
       </select>
 

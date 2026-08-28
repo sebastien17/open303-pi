@@ -19,12 +19,13 @@ DEFAULT_FILE = "/etc/default/open303"
 BINARY = "/usr/local/bin/open303_pi_host"
 APPLY_SCRIPT = "/usr/local/sbin/open303-web-apply.sh"
 
-# Caracteres attendus dans un nom de peripherique ALSA/RtAudio (ex: "KT USB
-# Audio (USB Audio)"). Pas d'authentification sur cette interface : on
-# n'ecrit jamais tel quel dans /etc/default/open303 (via sudo) une valeur qui
-# ne matche pas ce format, meme si subprocess.run() sans shell=True exclut
-# deja l'injection de commande classique.
-AUDIO_DEVICE_RE = re.compile(r"^[A-Za-z0-9 _\-().:]{0,100}$")
+# Caracteres attendus dans un nom de peripherique ALSA/RtAudio/RtMidi (ex:
+# "KT USB Audio (USB Audio)", "Elektron Digitakt II:...24:0"). Pas
+# d'authentification sur cette interface : on n'ecrit jamais tel quel dans
+# /etc/default/open303 (via sudo) une valeur qui ne matche pas ce format,
+# meme si subprocess.run() sans shell=True exclut deja l'injection de
+# commande classique.
+DEVICE_NAME_RE = re.compile(r"^[A-Za-z0-9 _\-().:]{0,100}$")
 
 app = Flask(__name__)
 
@@ -74,9 +75,54 @@ def list_audio_devices():
     return devices
 
 
+def current_midi_port():
+    """Dernier port MIDI reellement ouvert par open303.service, lu dans ses
+    logs (ligne "MIDI ouvert sur: ..."). Contrairement a l'audio, RtMidi ne
+    bloque pas l'enumeration d'un port deja utilise par un autre processus
+    (les sequenceurs ALSA supportent plusieurs abonnes) -- pas besoin de
+    fusionner ce resultat dans list_midi_ports(), juste de l'afficher."""
+    try:
+        out = subprocess.run(
+            ["journalctl", "-u", "open303.service", "-n", "200", "--no-pager"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return ""
+    match = None
+    for line in out.splitlines():
+        m = re.search(r"MIDI ouvert sur:\s*(.+)", line)
+        if m:
+            match = m.group(1).strip()
+    return match or ""
+
+
+def list_midi_ports():
+    """Interroge le binaire (--list-midi-ports). Exclut les ports internes
+    de rtpmidid ("Network Export", "Announcements") : verifie empiriquement
+    qu'ils ne relaient PAS le MIDI local/reseau vers un abonne tiers (ce sont
+    des ports de service, pas une source generique) -- les proposer dans le
+    menu ne ferait que produire un choix qui semble valide mais ne recoit
+    jamais rien. "Midi Through" reste propose : c'est le point d'entree reel
+    aussi bien pour un controleur USB que pour le MIDI recu via rtpmidid
+    (cf commentaires dans pickMidiPort(), src/main.cpp)."""
+    try:
+        out = subprocess.run(
+            [BINARY, "--list-midi-ports"], capture_output=True, text=True, timeout=5
+        ).stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    ports = []
+    for line in out.splitlines():
+        m = re.match(r"\s*\[(\d+)\]\s+(.*)", line)
+        if m and "rtpmidid" not in m.group(2):
+            ports.append(m.group(2).strip())
+    return ports
+
+
 def read_current_config():
     channel = None  # None = tous les canaux
     audio_device = ""
+    midi_port = ""
     try:
         with open(DEFAULT_FILE) as f:
             content = f.read()
@@ -90,18 +136,24 @@ def read_current_config():
     m = re.search(r'--audio-device\s+"([^"]*)"', extra_args)
     if m:
         audio_device = m.group(1)
-    return channel, audio_device
+    m = re.search(r'--midi-port\s+"([^"]*)"', extra_args)
+    if m:
+        midi_port = m.group(1)
+    return channel, audio_device, midi_port
 
 
 @app.route("/")
 def index():
-    channel, audio_device = read_current_config()
+    channel, audio_device, midi_port = read_current_config()
     return render_template(
         "index.html",
         channel=channel,
         audio_device=audio_device,
         active_device=current_output_device(),
         devices=list_audio_devices(),
+        midi_port=midi_port,
+        active_midi_port=current_midi_port(),
+        midi_ports=list_midi_ports(),
     )
 
 
@@ -130,9 +182,12 @@ def qr_png():
 def apply():
     channel_raw = request.form.get("channel", "all")
     audio_device = request.form.get("audio_device", "").strip()
+    midi_port = request.form.get("midi_port", "").strip()
 
-    if not AUDIO_DEVICE_RE.match(audio_device):
+    if not DEVICE_NAME_RE.match(audio_device):
         abort(400, "Invalid device name.")
+    if not DEVICE_NAME_RE.match(midi_port):
+        abort(400, "Invalid MIDI port name.")
 
     extra_args = ""
     if channel_raw != "all":
@@ -145,6 +200,8 @@ def apply():
         extra_args += f"--channel {channel} "
     if audio_device:
         extra_args += f'--audio-device "{audio_device}" '
+    if midi_port:
+        extra_args += f'--midi-port "{midi_port}" '
 
     subprocess.run(
         ["sudo", "-n", APPLY_SCRIPT, extra_args.strip()],
