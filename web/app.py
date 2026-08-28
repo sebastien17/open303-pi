@@ -27,10 +27,33 @@ AUDIO_DEVICE_RE = re.compile(r"^[A-Za-z0-9 _\-().:]{0,100}$")
 app = Flask(__name__)
 
 
+def current_output_device():
+    """Peripheriques de sortie deja ouverts en exclusif par open303.service
+    (le device actif) n'apparaissent PAS dans `--list-devices` -- RtAudio ne
+    peut pas sonder un device qu'un autre process a deja ouvert. Constate en
+    pratique : la carte USB active disparait de l'enumeration tant que le
+    service tourne. On retrouve donc le device reellement utilise via la
+    derniere ligne "Sortie audio: ..." des logs, pour l'ajouter a la liste."""
+    try:
+        out = subprocess.run(
+            ["journalctl", "-u", "open303.service", "-n", "200", "--no-pager"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return ""
+    match = None
+    for line in out.splitlines():
+        m = re.search(r"Sortie audio:\s*(.+)", line)
+        if m:
+            match = m.group(1).strip()
+    return match or ""
+
+
 def list_audio_devices():
     """Interroge le binaire lui-meme (--list-devices) pour la liste exacte
     des peripheriques qu'il verrait au demarrage -- evite toute divergence
-    avec une enumeration ALSA faite cote Python."""
+    avec une enumeration ALSA faite cote Python. Complete avec le device
+    actuellement actif (cf current_output_device()) s'il manque a l'appel."""
     try:
         out = subprocess.run(
             [BINARY, "--list-devices"], capture_output=True, text=True, timeout=5
@@ -42,6 +65,10 @@ def list_audio_devices():
         m = re.match(r"\s*\[(\d+)\]\s+(.*)", line)
         if m:
             devices.append(m.group(2).strip())
+
+    active = current_output_device()
+    if active and active not in devices:
+        devices.insert(0, active)
     return devices
 
 
@@ -71,6 +98,7 @@ def index():
         "index.html",
         channel=channel,
         audio_device=audio_device,
+        active_device=current_output_device(),
         devices=list_audio_devices(),
     )
 

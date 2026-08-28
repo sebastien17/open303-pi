@@ -122,7 +122,8 @@
 
     <div class="box" data-title="ETAT ACTUEL">
       <div class="row"><span>canal midi</span><span class="val">{{ "TOUS" if channel is none else channel }}</span></div>
-      <div class="row"><span>sortie audio</span><span class="val">{{ audio_device if audio_device else "auto" }}</span></div>
+      <div class="row"><span>sortie audio (config)</span><span class="val">{{ audio_device if audio_device else "auto" }}</span></div>
+      <div class="row"><span>sortie audio (active)</span><span class="val">{{ active_device if active_device else "?" }}</span></div>
     </div>
 
     <form class="box" data-title="CONFIGURATION" method="post" action="{{ url_for('apply') }}">
