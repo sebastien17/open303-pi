@@ -242,6 +242,38 @@ void drainMidiQueue() {
 // ---------------------------------------------------------------------
 // Callback RtMidi : ne touche PAS au synthe, se contente d'empiler
 // ---------------------------------------------------------------------
+// Journalise un evenement MIDI recu (canal deja filtre) sur stdout. Ce
+// thread (RtMidi, priorite normale) n'est pas RT-sensible -- contrairement a
+// applyMidiEvent()/audioCallback(), un printf ici ne pose aucun probleme de
+// temps reel. Utile pour verifier ce qui arrive reellement (ex: debogage
+// d'une source reseau rtpmidid) sans outil externe (aseqdump).
+void logMidiEvent(const MidiEvent& ev) {
+  const int channel = ev.status & 0x0F;
+  switch (ev.status & 0xF0) {
+    case 0x90:
+      if (ev.data2 == 0) {
+        std::printf("[midi] Note Off ch=%d note=%d\n", channel, ev.data1);
+      } else {
+        std::printf("[midi] Note On  ch=%d note=%d vel=%d%s\n", channel, ev.data1, ev.data2,
+                    ev.data2 >= 100 ? " (accent)" : "");
+      }
+      break;
+    case 0x80:
+      std::printf("[midi] Note Off ch=%d note=%d\n", channel, ev.data1);
+      break;
+    case 0xB0:
+      std::printf("[midi] CC       ch=%d cc=%d val=%d\n", channel, ev.data1, ev.data2);
+      break;
+    case 0xE0:
+      std::printf("[midi] Pitch Bend ch=%d value=%d\n", channel,
+                  (static_cast<int>(ev.data2) << 7) | ev.data1);
+      break;
+    default:
+      std::printf("[midi] status=0x%02X data1=%d data2=%d\n", ev.status, ev.data1, ev.data2);
+      break;
+  }
+}
+
 void handleMidiMessage(double /*deltatime*/, std::vector<unsigned char>* message, void* /*userData*/) {
   if (!message || message->size() < 2) return;
   const auto& msg = *message;
@@ -253,6 +285,7 @@ void handleMidiMessage(double /*deltatime*/, std::vector<unsigned char>* message
   ev.status = msg[0];
   ev.data1  = msg[1];
   ev.data2  = (msg.size() > 2) ? msg[2] : 0;
+  logMidiEvent(ev);
   pushMidiEvent(ev);
 }
 
