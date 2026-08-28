@@ -380,17 +380,31 @@ int pickMidiPort(RtMidiIn& midiin, const std::string& preferredSubstring = "") {
   // present en position 0, et ne correspond a aucun materiel branche. Le
   // prendre par defaut (comme le faisait un simple "return 0") revient a
   // ignorer silencieusement le vrai controleur USB des qu'il en existe un.
-  // On prend donc le premier port qui n'est PAS "Midi Through". Note :
-  // rtpmidid exporte par defaut "Midi Through" sur le reseau (RTP-MIDI), donc
-  // ce meme port sert aussi de point d'entree pour le MIDI recu en Wi-Fi
-  // quand aucun controleur USB n'est branche.
+  // On prend donc le premier port qui n'est ni "Midi Through" ni un port
+  // interne de rtpmidid ("Network Export", "Announcements") -- ces derniers
+  // existent toujours des que rtpmidid tourne, mais sont sa plomberie
+  // interne, pas des sources MIDI generiques : y souscrire directement ne
+  // recoit PAS le MIDI local injecte sur "Midi Through" (verifie
+  // empiriquement -- aucune activite du synthe lors d'un test aseqsend cible
+  // sur "Midi Through" alors que le client ecoutait "rtpmidid:Network
+  // Export"). rtpmidid exporte "Midi Through" vers/depuis le reseau en
+  // arriere-plan (RTP-MIDI) : c'est donc "Midi Through" qui reste le bon
+  // point d'entree par defaut, aussi pour le MIDI recu en Wi-Fi.
   for (unsigned int i = 0; i < nPorts; ++i) {
-    if (midiin.getPortName(i).find("Midi Through") == std::string::npos) {
+    const std::string name = midiin.getPortName(i);
+    if (name.find("Midi Through") == std::string::npos &&
+        name.find("rtpmidid") == std::string::npos) {
       return static_cast<int>(i);
     }
   }
-  // Rien d'autre que des ports "Midi Through" : on s'y connecte quand meme,
-  // au cas ou un logiciel MIDI local y enverrait des evenements via ALSA.
+  // Rien d'autre que "Midi Through"/rtpmidid : on s'y connecte quand meme
+  // (position du premier port "Midi Through" trouve), au cas ou un logiciel
+  // MIDI local ou une session reseau y enverrait des evenements via ALSA.
+  for (unsigned int i = 0; i < nPorts; ++i) {
+    if (midiin.getPortName(i).find("Midi Through") != std::string::npos) {
+      return static_cast<int>(i);
+    }
+  }
   return 0;
 }
 
