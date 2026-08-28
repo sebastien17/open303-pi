@@ -110,8 +110,16 @@ def qr_png():
     """QR code pointant vers l'URL reellement utilisee pour acceder a la
     page (request.url_root reprend le Host: envoye par le client, donc
     l'IP/port effectivement joignables sur le reseau local) -- genere a la
-    volee, pas de cache, l'IP du Pi pouvant changer entre deux boots."""
-    img = qrcode.make(request.url_root, border=2)
+    volee, pas de cache, l'IP du Pi pouvant changer entre deux boots.
+
+    Couleurs alignees sur le theme terminal de la page (vert vif sur fond
+    quasi-noir) plutot que le noir/blanc par defaut : contraste toujours
+    largement suffisant pour un scan telephone, la luminance entre les deux
+    couleurs restant tres marquee."""
+    qr = qrcode.QRCode(border=2)
+    qr.add_data(request.url_root)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#aaffbb", back_color="#0b0f0a")
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
