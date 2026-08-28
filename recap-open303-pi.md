@@ -271,12 +271,69 @@ appareil compatible disponible pendant cette session. Seul le mécanisme local (
 comme point d'entrée partagé, cohérent avec la config `alsa_hw_auto_export` par défaut de
 rtpmidid) a pu être vérifié.
 
+## Session de debug MIDI Wi-Fi réel + logging + limite structurelle de rtpmidid
+
+Tentative de faire jouer le 303 en conditions réelles via le Digitakt → USB → PC Windows →
+rtpMIDI → réseau → Pi. Plusieurs bugs réels trouvés et corrigés, une limite structurelle
+identifiée (non corrigée, cf ci-dessous), et le vrai blocage final situé hors du projet.
+
+30. **`--midi-port`/`--list-midi-ports` corrigés une seconde fois.** Le correctif précédent
+    (point 27) excluait les noms contenant "rtpmidid" trop largement lors du choix EXPLICITE
+    aussi — non, en fait le vrai bug ici était différent : `pickMidiPort()` fonctionnait, mais
+    **la sélection automatique retombe sur un port de test rtpmidid périmé** (`rtpmidid:PyMIDI`,
+    `rtpmidid:NimH-PC`...) plutôt que sur `Midi Through` quand plusieurs instances du même nom
+    trainent (rtpmidid ne nettoie pas toujours les ports ALSA des sessions mortes). Contournement
+    ce soir : `sudo systemctl restart rtpmidid.service` pour purger les ports fantômes.
+31. **Log des événements MIDI ajouté** (`logMidiEvent()` dans `handleMidiMessage()`, thread MIDI,
+    pas RT-sensible) : `[midi] Note On/Off/CC/Pitch Bend ...` sur stdout. A permis de confirmer
+    sans ambiguïté quand un événement atteint réellement `handleMidiMessage()`.
+32. **Découverte majeure : injecter du MIDI directement dans un port `rtpmidid:<pair>` via
+    `aseqsend` ne fonctionne PAS**, même quand `aconnect -l` montre la souscription comme
+    active. Seul `Midi Through` (14:0) relaie fiablement les événements injectés localement.
+    Plusieurs "confirmations CPU" antérieures dans cette session sur des ports `rtpmidid:*`
+    étaient probablement des faux positifs, coïncidant avec de vraies tentatives de
+    l'utilisateur au même moment. **Toujours tester via `--midi-port "Midi Through"` +
+    `aseqsend -p 14:0` pour un test fiable et reproductible.**
+33. **Limite structurelle non corrigée : rtpmidid crée un nouveau port ALSA à chaque connexion**
+    (`[rtpmidi_announce]` et `[rtpmidi_discover]`), sans les nettoyer de façon fiable. Notre
+    binaire ne s'abonne qu'une fois au démarrage : si la session réseau change (reconnexion,
+    nouveau pair), l'abonnement existant devient orphelin silencieusement, et rien ne permet de
+    savoir quel port numéroté est "le bon" quand plusieurs portent le même nom. **Fix propre pour
+    une prochaine session** : suivre les événements du port ALSA "Announce" (client 0) pour
+    détecter les changements de topologie et se ré-abonner dynamiquement, au lieu de choisir une
+    fois au démarrage.
+34. **Client Python AppleMIDI/RTP-MIDI minimal écrit** (`rtpmidi_test.py`, stdlib seule) pour
+    simuler un envoi MIDI Wi-Fi depuis le PC sans dépendre du Digitakt/rtpMIDI Windows. Handshake
+    fonctionnel côté serveur (confirmé dans les logs rtpmidid : peer créé, port ALSA créé,
+    connecté) même si le client ne reçoit pas toujours l'accusé de réception du port data (à
+    ignorer, sans conséquence — le serveur traite la session correctement quand même).
+35. **Cause racine réelle du silence "MIDI envoyé, rien n'arrive" côté Digitakt** : confirmé via
+    MIDI-OX (moniteur MIDI Windows) que **le Digitakt n'envoie aucun octet MIDI vers Windows en
+    USB**, même piste MIDI dédiée (piste 16), séquenceur en lecture, trigs présents, port USB MIDI
+    activé dans `MIDI CONFIG`. Hors du périmètre de ce projet — à creuser côté Digitakt/USB/OS
+    (câble, port USB, réglage manquant) dans une session dédiée.
+36. **Suspicion forte de dongle audio USB défaillant.** Le même test exact (`Midi Through`,
+    même note, même config, aucun changement logiciel) a produit un son audible à 00:58 puis plus
+    aucun son à 01:13, quinze minutes plus tard. Combiné aux anomalies déjà observées ce soir
+    (renumérotation de carte inexpliquée, 44100 Hz silencieux puis fonctionnel puis silencieux
+    à nouveau), le diagnostic le plus probable est un **adaptateur USB audio générique
+    ("KT USB Audio") intrinsèquement peu fiable**, pas un bug logiciel. À tester avec un autre
+    adaptateur USB audio, ou en repli sur la sortie jack embarquée pour confirmer que le problème
+    n'est pas propre à l'USB audio sur ce Pi en général.
+
 ## Reste à faire
 
 - Valider à l'oreille les CC20-29 et les 3 flags CLI (`--square-phase`/`--tanh-drive`/
   `--tanh-offset`), pas encore testés.
-- Valider une vraie connexion RTP-MIDI entrante depuis un pair réseau (iPad, DAW...) — non testé
-  faute de matériel compatible disponible.
+- Valider une vraie connexion RTP-MIDI entrante depuis un pair réseau (iPad, DAW...) — le
+  mécanisme fonctionne côté serveur (confirmé via le client Python de test) mais pas encore
+  validé de bout en bout avec un vrai pair stable.
+- **Résoudre la fiabilité de l'adaptateur audio USB** (remplacer ou tester un autre modèle) —
+  suspecté défaillant par intermittence (point 36 ci-dessus).
+- **Corriger la ré-souscription MIDI dynamique** pour rtpmidid (point 33) : suivre les
+  changements de topologie ALSA au lieu de choisir un port une seule fois au démarrage.
+- **Diagnostiquer pourquoi le Digitakt n'envoie rien en USB MIDI vers Windows** (point 35),
+  indépendamment de ce projet.
 
 ## À valider à l'oreille sur le Pi
 
