@@ -364,6 +364,13 @@ int pickMidiPort(RtMidiIn& midiin) {
 // externe automatiquement. Or le DAC embarque est nettement moins bon (cf
 // README) : on prefere donc explicitement tout device qui n'est PAS l'une
 // des sorties embarquees connues du Pi, si un tel device existe.
+//
+// "Default ALSA Device" est une entree synthetique ajoutee par le backend
+// ALSA de RtAudio (constatee en pratique sur RtAudio 6.0.1, listee en
+// premier) qui redirige elle-meme vers le device ALSA "default" -- donc vers
+// bcm2835 sur ce Pi. Elle ne contient ni "bcm2835" ni "vc4hdmi" dans son nom
+// et etait donc choisie a tort avant meme d'atteindre la vraie carte USB :
+// exclue explicitement, comme les sorties embarquees.
 unsigned int pickAudioOutputDevice(RtAudio& dac) {
   std::vector<unsigned int> ids = dac.getDeviceIds();
   std::printf("Peripheriques audio disponibles:\n");
@@ -374,7 +381,8 @@ unsigned int pickAudioOutputDevice(RtAudio& dac) {
     std::printf("  [%u] %s\n", id, info.name.c_str());
     const bool isBuiltIn = info.name.find("bcm2835") != std::string::npos ||
                             info.name.find("vc4hdmi") != std::string::npos ||
-                            info.name.find("vc4-hdmi") != std::string::npos;
+                            info.name.find("vc4-hdmi") != std::string::npos ||
+                            info.name == "Default ALSA Device";
     if (!isBuiltIn && chosen < 0) {
       chosen = static_cast<int>(id);
     }
@@ -388,6 +396,14 @@ unsigned int pickAudioOutputDevice(RtAudio& dac) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  // stdout n'est pas un TTY sous systemd (redirige vers un pipe/journald) :
+  // glibc bufferise alors par blocs de 4 Ko au lieu de ligne par ligne, donc
+  // les printf restent coincees en memoire jusqu'a ce que le process
+  // s'arrete (flush a la sortie normale de main()) au lieu d'apparaitre en
+  // temps reel dans `journalctl -f`. Force le mode ligne par ligne dans tous
+  // les cas.
+  std::setvbuf(stdout, nullptr, _IOLBF, 0);
+
   std::signal(SIGINT, onSignal);
   std::signal(SIGTERM, onSignal);
 
