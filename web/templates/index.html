@@ -121,7 +121,7 @@
 
     <div class="box" data-title="STATUS">
       <div class="row"><span>midi channel</span><span class="val">{{ "ALL" if channel is none else channel }}</span></div>
-      <div class="row"><span>midi port (config)</span><span class="val">{{ midi_port if midi_port else "auto" }}</span></div>
+      <div class="row"><span>midi port (config)</span><span class="val">{{ midi_port_display if midi_port_display else "auto" }}</span></div>
       <div class="row"><span>midi port (active)</span><span class="val">{{ active_midi_port if active_midi_port else "?" }}</span></div>
       <div class="row"><span>audio output (config)</span><span class="val">{{ audio_device if audio_device else "auto" }}</span></div>
       <div class="row"><span>audio output (active)</span><span class="val">{{ active_device if active_device else "?" }}</span></div>

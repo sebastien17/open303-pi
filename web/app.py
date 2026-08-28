@@ -96,6 +96,16 @@ def current_midi_port():
     return match or ""
 
 
+def midi_port_label(name):
+    """Meme regle que dans list_midi_ports() : c'est soit "Midi Through"
+    (Wi-Fi via rtpmidid ou boucle locale), soit forcement un controleur USB
+    reel dans ce projet. Utilise aussi bien pour les options du menu que
+    pour l'affichage du port configure/actif dans le bloc STATUS."""
+    if not name:
+        return ""
+    return "WiFi (rtpmidid)" if "Midi Through" in name else f"USB: {name}"
+
+
 def list_midi_ports():
     """Interroge le binaire (--list-midi-ports). Exclut les ports internes
     de rtpmidid ("Network Export", "Announcements") : verifie empiriquement
@@ -127,8 +137,7 @@ def list_midi_ports():
         if not m or "rtpmidid" in m.group(2):
             continue
         name = m.group(2).strip()
-        label = "WiFi (rtpmidid)" if "Midi Through" in name else f"USB: {name}"
-        ports.append({"value": name, "label": label})
+        ports.append({"value": name, "label": midi_port_label(name)})
     return ports
 
 
@@ -165,7 +174,8 @@ def index():
         active_device=current_output_device(),
         devices=list_audio_devices(),
         midi_port=midi_port,
-        active_midi_port=current_midi_port(),
+        midi_port_display=midi_port_label(midi_port),
+        active_midi_port=midi_port_label(current_midi_port()),
         midi_ports=list_midi_ports(),
     )
 
