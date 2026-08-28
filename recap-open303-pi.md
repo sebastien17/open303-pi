@@ -153,10 +153,39 @@ testé avec une carte son USB.
 
 Pas encore testés à l'oreille (CC20-29 ni les 3 flags CLI) : à valider sur le Pi à l'occasion.
 
+## Sortie audio USB + `--rt` validés (adaptateur UGREEN)
+
+Deux bugs trouvés en essayant de faire sortir le son sur un adaptateur USB générique ("KT USB
+Audio", branché sur le Pi) plutôt que sur la sortie embarquée :
+
+21. **`dac.getDefaultOutputDevice()` ignorait le device USB branché.** ALSA ne priorise pas le
+    matériel externe : le device "par défaut" restait `bcm2835 Headphones` même adaptateur USB
+    branché. Corrigé par `pickAudioOutputDevice()` (même logique que `pickMidiPort()`) : on
+    énumère les devices et on prend le premier qui n'est pas une sortie embarquée connue
+    (`bcm2835`, `vc4hdmi`).
+22. **`"Default ALSA Device"` déjouait la correction ci-dessus.** RtAudio (backend ALSA, constaté
+    sur RtAudio 6.0.1) ajoute une entrée synthétique de ce nom, listée en premier, qui redirige
+    elle-même vers le device ALSA "default" (donc `bcm2835`) — sans "bcm2835"/"vc4hdmi" dans son
+    nom, elle passait le filtre et était choisie à tort avant la vraie carte USB. Exclue
+    explicitement.
+
+Au passage, `setvbuf(stdout, ..., _IOLBF, 0)` ajouté en début de `main()` : sous systemd, stdout
+n'est pas un TTY donc glibc bufferise par blocs de 4 Ko au lieu de ligne par ligne — tous les
+printf de diagnostic restaient coincés en mémoire jusqu'à l'arrêt du process (flush différé,
+`journalctl` montrait alors des messages avec l'horodatage du *redémarrage suivant*, pas du
+moment réel où ils avaient été émis — source de confusion en debug, un process tournant
+normalement dans sa boucle d'attente semblait "bloqué" faute de sortie visible).
+
+**Validé au clavier virtuel** (notes injectées via `aseqsend` + un script Python sur le port ALSA
+`Midi Through` — une première tentative en bash/sed pour convertir l'hex en binaire échouait
+silencieusement sur ce Pi, `sed` y perdant les backslashes) : sortie `KT USB Audio` confirmée dans
+les logs, `--rt` actif sans craquement sur cet adaptateur, notes séparées, legato/slide (glissando
+continu sur chevauchement), accent, note tenue longue — tout confirmé bon à l'oreille.
+
 ## Reste à faire
 
-Rien d'identifié pour l'instant au-delà de la validation à l'oreille des CC20-29 et des 3
-nouveaux flags CLI (section précédente).
+Valider à l'oreille les CC20-29 et les 3 flags CLI (`--square-phase`/`--tanh-drive`/
+`--tanh-offset`), pas encore testés. Rien d'autre d'identifié.
 
 ## À valider à l'oreille sur le Pi
 
