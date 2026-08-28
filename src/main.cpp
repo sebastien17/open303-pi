@@ -24,6 +24,7 @@
 #include <cstdio>
 #include <cstring>
 #include <thread>
+#include <vector>
 
 #include "RtAudio.h"
 #include "RtMidi.h"
@@ -356,6 +357,34 @@ int pickMidiPort(RtMidiIn& midiin) {
   return 0;
 }
 
+// Choisit le device de sortie audio. Meme logique que pickMidiPort() :
+// dac.getDefaultOutputDevice() renvoie le device "par defaut" tel que defini
+// par ALSA, qui reste la sortie embarquee du Pi (bcm2835/vc4hdmi) meme
+// lorsqu'une carte son USB est branchee -- ALSA ne priorise pas le materiel
+// externe automatiquement. Or le DAC embarque est nettement moins bon (cf
+// README) : on prefere donc explicitement tout device qui n'est PAS l'une
+// des sorties embarquees connues du Pi, si un tel device existe.
+unsigned int pickAudioOutputDevice(RtAudio& dac) {
+  std::vector<unsigned int> ids = dac.getDeviceIds();
+  std::printf("Peripheriques audio disponibles:\n");
+  int chosen = -1;
+  for (unsigned int id : ids) {
+    RtAudio::DeviceInfo info = dac.getDeviceInfo(id);
+    if (info.outputChannels == 0) continue;  // entree seule (micro...)
+    std::printf("  [%u] %s\n", id, info.name.c_str());
+    const bool isBuiltIn = info.name.find("bcm2835") != std::string::npos ||
+                            info.name.find("vc4hdmi") != std::string::npos ||
+                            info.name.find("vc4-hdmi") != std::string::npos;
+    if (!isBuiltIn && chosen < 0) {
+      chosen = static_cast<int>(id);
+    }
+  }
+  if (chosen >= 0) return static_cast<unsigned int>(chosen);
+  // Rien d'externe trouve : on retombe sur le device par defaut ALSA (donc
+  // la sortie embarquee, dans la plupart des cas sur un Pi).
+  return dac.getDefaultOutputDevice();
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -480,8 +509,9 @@ int main(int argc, char** argv) {
   }
 
   RtAudio::StreamParameters outParams;
-  outParams.deviceId = dac.getDefaultOutputDevice();
+  outParams.deviceId = pickAudioOutputDevice(dac);
   outParams.nChannels = 2;
+  std::printf("Sortie audio: %s\n", dac.getDeviceInfo(outParams.deviceId).name.c_str());
 
   RtAudio::StreamOptions options;
   // Le scheduling temps reel est OPT-IN (--rt), pas active par defaut :
