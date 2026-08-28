@@ -317,6 +317,32 @@ editez `/etc/default/open303` puis `sudo systemctl restart open303`.
   `EXTRA_ARGS` ci-dessus) pour filtrer sur le canal de la piste MIDI dediee
   au 303 sur le Digitakt.
 
+## 8. Interface web de pilotage (optionnel)
+
+Petite page web pour changer le canal MIDI ecoute et le peripherique de
+sortie audio sans taper de commande — pratique une fois le Pi installe sans
+ecran/clavier branches. Ne touche jamais au binaire audio directement : elle
+reecrit `/etc/default/open303` et redemarre `open303.service` (via un script
+`sudo` scope a cette seule action).
+
+Deux nouveaux flags CLI la rendent possible :
+- `--audio-device SOUS-CHAINE` : force la sortie audio dont le nom contient
+  cette sous-chaine (ex: `--audio-device USB`). Sans correspondance, repli
+  sur la selection automatique (cf section 6) avec un avertissement.
+- `--list-devices` : affiche les peripheriques audio disponibles (memes noms
+  que ceux vus au demarrage normal) et quitte, sans ouvrir MIDI ni audio.
+
+**Installation** (apres `systemd/install-service.sh`, sur le Pi) :
+```bash
+sudo apt install -y python3-flask
+sudo web/install-web.sh
+```
+L'interface est alors accessible sur `http://<ip-du-pi>:8303`.
+
+**Aucune authentification** : reservez cette interface a un reseau local de
+confiance (Wi-Fi maison), ne l'exposez pas directement sur Internet — un
+tiers y ayant acces pourrait redemarrer le service ou changer sa config.
+
 ## 9. Depannage
 
 Problemes rencontres en pratique et leur solution, dans l'ordre ou ils ont

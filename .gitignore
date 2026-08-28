@@ -1,3 +1,5 @@
 build/
 build-cross/
 build-wsl/
+__pycache__/
+*.pyc

@@ -1,0 +1,6 @@
+# Installe dans /etc/sudoers.d/open303-web (mode 440, root:root) par
+# install-web.sh. Autorise UNIQUEMENT l'utilisateur systeme open303-web a
+# executer open303-web-apply.sh en root, sans mot de passe -- aucun autre
+# acces sudo. Le script lui-meme revalide son argument avant d'ecrire quoi
+# que ce soit (cf commentaires dans open303-web-apply.sh).
+open303-web ALL=(root) NOPASSWD: /usr/local/sbin/open303-web-apply.sh

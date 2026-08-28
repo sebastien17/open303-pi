@@ -1,0 +1,21 @@
+[Unit]
+Description=open303-pi - interface web de pilotage (canal MIDI, sortie audio)
+After=network.target open303.service
+
+[Service]
+Type=simple
+User=open303-web
+Group=open303-web
+WorkingDirectory=/usr/local/lib/open303-web
+ExecStart=/usr/bin/python3 /usr/local/lib/open303-web/app.py
+Restart=on-failure
+RestartSec=3
+
+# PAS de NoNewPrivileges=true ici : contrairement a open303.service, ce
+# service a besoin d'escalader via `sudo -n open303-web-apply.sh` pour
+# reecrire /etc/default/open303 et redemarrer open303.service. Cette regle
+# sudo est scopee a ce seul script (voir open303-web.sudoers), pas d'acces
+# root plus large.
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>open303-pi // control</title>
+<style>
+  :root {
+    --bg: #0b0f0a;
+    --fg: #33ff66;
+    --fg-dim: #1f9944;
+    --fg-bright: #aaffbb;
+    --amber: #ffb000;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Courier New", Courier, monospace;
+    font-size: 15px;
+    line-height: 1.4;
+    margin: 0;
+    padding: 24px 16px 60px;
+    text-shadow: 0 0 2px rgba(51, 255, 102, 0.5);
+  }
+  .crt {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  pre.banner {
+    color: var(--fg-bright);
+    text-align: center;
+    margin: 0 0 8px;
+    font-size: 12px;
+    line-height: 1.1;
+  }
+  .subtitle {
+    text-align: center;
+    color: var(--fg-dim);
+    margin-bottom: 24px;
+    letter-spacing: 2px;
+  }
+  .box {
+    border: 1px solid var(--fg-dim);
+    padding: 16px 18px;
+    margin-bottom: 20px;
+    position: relative;
+  }
+  .box::before {
+    content: attr(data-title);
+    position: absolute;
+    top: -10px;
+    left: 12px;
+    background: var(--bg);
+    padding: 0 8px;
+    color: var(--fg-bright);
+    letter-spacing: 1px;
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    border-bottom: 1px dotted var(--fg-dim);
+  }
+  .row:last-child { border-bottom: none; }
+  .row .val { color: var(--fg-bright); }
+  label {
+    display: block;
+    margin: 14px 0 4px;
+    color: var(--fg-dim);
+  }
+  label::before { content: "> "; }
+  select {
+    width: 100%;
+    background: #061007;
+    color: var(--fg);
+    border: 1px solid var(--fg-dim);
+    font-family: inherit;
+    font-size: inherit;
+    padding: 6px 8px;
+  }
+  select:focus { outline: 1px solid var(--fg); }
+  button {
+    margin-top: 20px;
+    width: 100%;
+    background: transparent;
+    color: var(--amber);
+    border: 1px solid var(--amber);
+    font-family: inherit;
+    font-size: inherit;
+    padding: 10px;
+    letter-spacing: 2px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--amber); color: #1a1200; }
+  .cursor {
+    display: inline-block;
+    width: 9px;
+    height: 1em;
+    background: var(--fg);
+    vertical-align: text-bottom;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .footer {
+    text-align: center;
+    color: var(--fg-dim);
+    margin-top: 24px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+  <div class="crt">
+    <pre class="banner">
+ ___  ____  ____  _  _  ____  ____  ____     ____  __
+/ __)(  _ \(  __)( \( )(_  _)(  _ \(_  _)   (  _ \(  )
+\__ \ )___/ ) _)  )  (   )(   )___/ _)(_     )___/ )(
+(___/(__)  (____)(_)\_) (__) (__)  (____)   (__)  (__)
+    </pre>
+    <div class="subtitle">:: PANNEAU DE CONTROLE ::<span class="cursor"></span></div>
+
+    <div class="box" data-title="ETAT ACTUEL">
+      <div class="row"><span>canal midi</span><span class="val">{{ "TOUS" if channel is none else channel }}</span></div>
+      <div class="row"><span>sortie audio</span><span class="val">{{ audio_device if audio_device else "auto" }}</span></div>
+    </div>
+
+    <form class="box" data-title="CONFIGURATION" method="post" action="{{ url_for('apply') }}">
+      <label for="channel">canal midi ecoute</label>
+      <select name="channel" id="channel">
+        <option value="all" {{ "selected" if channel is none }}>tous les canaux</option>
+        {% for n in range(16) %}
+        <option value="{{ n }}" {{ "selected" if channel == n }}>canal {{ n }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="audio_device">peripherique de sortie</label>
+      <select name="audio_device" id="audio_device">
+        <option value="" {{ "selected" if not audio_device }}>auto (evite la sortie embarquee)</option>
+        {% for d in devices %}
+        <option value="{{ d }}" {{ "selected" if d == audio_device }}>{{ d }}</option>
+        {% endfor %}
+      </select>
+
+      <button type="submit">&gt; APPLIQUER &amp; REDEMARRER</button>
+    </form>
+
+    <div class="footer">open303-pi web control // redemarre open303.service a chaque application</div>
+  </div>
+</body>
+</html>

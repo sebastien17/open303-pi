@@ -323,13 +323,22 @@ void printUsage(const char* progName) {
       "                   (defaut: 36.9). Meme contrainte que --square-phase.\n"
       "  --tanh-offset V  Offset DC du shaper tanh de l'onde carree 303\n"
       "                   (defaut: 4.37). Meme contrainte que --square-phase.\n"
+      "  --audio-device S Force le peripherique de sortie dont le nom contient\n"
+      "                   la sous-chaine S (ex: \"USB\"). Sans correspondance,\n"
+      "                   repli sur la selection automatique avec avertissement.\n"
+      "                   Par defaut : le premier peripherique qui n'est pas\n"
+      "                   une sortie embarquee du Pi.\n"
+      "  --list-devices   Affiche les peripheriques audio disponibles et quitte\n"
+      "                   (n'ouvre ni MIDI ni flux audio).\n"
       "  -h, --help       Affiche cette aide et quitte.\n"
       "\n"
       "Exemples :\n"
       "  %s\n"
       "  %s 44100 128 --rt\n"
-      "  %s 48000 256 --channel 0\n",
-      progName, progName, progName, progName);
+      "  %s 48000 256 --channel 0\n"
+      "  %s --list-devices\n"
+      "  %s --audio-device USB\n",
+      progName, progName, progName, progName, progName, progName);
 }
 
 int pickMidiPort(RtMidiIn& midiin) {
@@ -371,14 +380,26 @@ int pickMidiPort(RtMidiIn& midiin) {
 // bcm2835 sur ce Pi. Elle ne contient ni "bcm2835" ni "vc4hdmi" dans son nom
 // et etait donc choisie a tort avant meme d'atteindre la vraie carte USB :
 // exclue explicitement, comme les sorties embarquees.
-unsigned int pickAudioOutputDevice(RtAudio& dac) {
+//
+// preferredSubstring (optionnel, cf --audio-device) force le choix du
+// premier device dont le nom la contient, prioritaire sur la logique
+// d'exclusion automatique ci-dessus. Repli silencieux sur cette derniere si
+// rien ne correspond (juste un avertissement), plutot que d'echouer : une
+// config perimee (materiel debranche/renomme) ne doit pas empecher le
+// service de demarrer.
+unsigned int pickAudioOutputDevice(RtAudio& dac, const std::string& preferredSubstring = "") {
   std::vector<unsigned int> ids = dac.getDeviceIds();
   std::printf("Peripheriques audio disponibles:\n");
   int chosen = -1;
+  int preferredMatch = -1;
   for (unsigned int id : ids) {
     RtAudio::DeviceInfo info = dac.getDeviceInfo(id);
     if (info.outputChannels == 0) continue;  // entree seule (micro...)
     std::printf("  [%u] %s\n", id, info.name.c_str());
+    if (!preferredSubstring.empty() && preferredMatch < 0 &&
+        info.name.find(preferredSubstring) != std::string::npos) {
+      preferredMatch = static_cast<int>(id);
+    }
     const bool isBuiltIn = info.name.find("bcm2835") != std::string::npos ||
                             info.name.find("vc4hdmi") != std::string::npos ||
                             info.name.find("vc4-hdmi") != std::string::npos ||
@@ -386,6 +407,13 @@ unsigned int pickAudioOutputDevice(RtAudio& dac) {
     if (!isBuiltIn && chosen < 0) {
       chosen = static_cast<int>(id);
     }
+  }
+  if (!preferredSubstring.empty()) {
+    if (preferredMatch >= 0) return static_cast<unsigned int>(preferredMatch);
+    std::fprintf(stderr,
+                 "--audio-device: aucun peripherique ne contient \"%s\", repli sur la selection "
+                 "automatique.\n",
+                 preferredSubstring.c_str());
   }
   if (chosen >= 0) return static_cast<unsigned int>(chosen);
   // Rien d'externe trouve : on retombe sur le device par defaut ALSA (donc
@@ -418,6 +446,9 @@ int main(int argc, char** argv) {
   double tanhShaperDrive  = 36.9;
   double tanhShaperOffset = 4.37;
 
+  bool listDevices = false;
+  std::string audioDeviceFilter;
+
   // Args positionnels (sampleRate, bufferFrames) et flags (--xxx) sont
   // distingues explicitement : sans ca, "open303_pi_host --sine" envoyait
   // "--sine" dans std::atof, qui renvoie silencieusement 0.0.
@@ -444,6 +475,14 @@ int main(int argc, char** argv) {
       }
       gMidiChannel = channel;
       std::printf("Canal MIDI filtre: %d\n", gMidiChannel);
+    } else if (std::strcmp(argv[i], "--audio-device") == 0) {
+      if (++i >= argc) {
+        std::fprintf(stderr, "--audio-device attend une sous-chaine du nom du peripherique\n");
+        return 1;
+      }
+      audioDeviceFilter = argv[i];
+    } else if (std::strcmp(argv[i], "--list-devices") == 0) {
+      listDevices = true;
     } else if (std::strcmp(argv[i], "--square-phase") == 0) {
       if (++i >= argc) {
         std::fprintf(stderr, "--square-phase attend une valeur en degres\n");
@@ -481,6 +520,20 @@ int main(int argc, char** argv) {
       std::fprintf(stderr, "Argument inattendu: %s\n", argv[i]);
       return 1;
     }
+  }
+
+  // --- Mode diagnostic : liste les peripheriques audio et quitte ---
+  // (reutilise pickAudioOutputDevice() pour son effet d'affichage ; sert a
+  // peupler un menu de selection -- ex: une interface web -- avec exactement
+  // les noms que verrait le vrai lancement du service.)
+  if (listDevices) {
+    RtAudio dac;
+    if (dac.getDeviceCount() == 0) {
+      std::fprintf(stderr, "Aucune carte audio detectee.\n");
+      return 1;
+    }
+    pickAudioOutputDevice(dac);
+    return 0;
   }
 
   // --- Init du moteur DSP ---
@@ -525,7 +578,7 @@ int main(int argc, char** argv) {
   }
 
   RtAudio::StreamParameters outParams;
-  outParams.deviceId = pickAudioOutputDevice(dac);
+  outParams.deviceId = pickAudioOutputDevice(dac, audioDeviceFilter);
   outParams.nChannels = 2;
   std::printf("Sortie audio: %s\n", dac.getDeviceInfo(outParams.deviceId).name.c_str());
 
