@@ -380,20 +380,25 @@ int pickMidiPort(RtMidiIn& midiin, const std::string& preferredSubstring = "") {
   // present en position 0, et ne correspond a aucun materiel branche. Le
   // prendre par defaut (comme le faisait un simple "return 0") revient a
   // ignorer silencieusement le vrai controleur USB des qu'il en existe un.
-  // On prend donc le premier port qui n'est ni "Midi Through" ni un port
-  // interne de rtpmidid ("Network Export", "Announcements") -- ces derniers
-  // existent toujours des que rtpmidid tourne, mais sont sa plomberie
-  // interne, pas des sources MIDI generiques : y souscrire directement ne
-  // recoit PAS le MIDI local injecte sur "Midi Through" (verifie
-  // empiriquement -- aucune activite du synthe lors d'un test aseqsend cible
-  // sur "Midi Through" alors que le client ecoutait "rtpmidid:Network
-  // Export"). rtpmidid exporte "Midi Through" vers/depuis le reseau en
-  // arriere-plan (RTP-MIDI) : c'est donc "Midi Through" qui reste le bon
-  // point d'entree par defaut, aussi pour le MIDI recu en Wi-Fi.
+  // On prend donc le premier port qui n'est ni "Midi Through" ni l'un des
+  // DEUX ports de service internes de rtpmidid, "Network Export" et
+  // "Announcements" -- ils existent toujours des que rtpmidid tourne, mais
+  // n'acheminent rien vers un abonne tiers (verifie empiriquement : aucune
+  // activite du synthe lors d'un test aseqsend cible sur "Midi Through"
+  // alors que le client ecoutait "rtpmidid:Network Export").
+  //
+  // ATTENTION : ne PAS exclure tout nom contenant juste "rtpmidid" -- ses
+  // ports par-pair reels (ex: "rtpmidid:NimH-PC", crees par
+  // rtpmidi_discover/rtpmidi_announce des qu'un pair reseau se connecte ou
+  // est decouvert) contiennent aussi ce prefixe et sont, eux, de vraies
+  // sources MIDI fonctionnelles a ne pas ignorer (bug constate en pratique :
+  // un pair reseau reellement connecte, visible dans les logs rtpmidid,
+  // restait invisible a la selection automatique).
   for (unsigned int i = 0; i < nPorts; ++i) {
     const std::string name = midiin.getPortName(i);
     if (name.find("Midi Through") == std::string::npos &&
-        name.find("rtpmidid") == std::string::npos) {
+        name.find("Network Export") == std::string::npos &&
+        name.find("Announcements") == std::string::npos) {
       return static_cast<int>(i);
     }
   }
