@@ -22,13 +22,17 @@ if ! python3 -c "import flask" 2>/dev/null; then
 fi
 
 echo "== Utilisateur dedie =="
-# Membre de systemd-journal pour pouvoir lire les logs de open303.service
-# (journalctl restreint l'acces par groupe) -- necessaire pour retrouver le
-# peripherique audio actuellement actif (cf app.py, current_output_device()).
+# systemd-journal : lire les logs de open303.service (journalctl restreint
+# l'acces par groupe), pour retrouver le peripherique audio actuellement
+# actif (cf app.py, current_output_device()).
+# audio : necessaire pour que "open303_pi_host --list-devices", lance par ce
+# meme utilisateur, puisse seulement OUVRIR /dev/snd/* et enumerer les
+# cartes -- sans ce groupe RtAudio ne voit litteralement aucune carte
+# ("Aucune carte audio detectee"), meme celles non exclusivement occupees.
 if ! id open303-web &>/dev/null; then
-  useradd --system --no-create-home --shell /usr/sbin/nologin -G systemd-journal open303-web
+  useradd --system --no-create-home --shell /usr/sbin/nologin -G systemd-journal,audio open303-web
 else
-  usermod -aG systemd-journal open303-web
+  usermod -aG systemd-journal,audio open303-web
 fi
 
 echo "== Copie de l'application =="
