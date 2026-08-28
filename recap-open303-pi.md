@@ -205,6 +205,35 @@ Note méthodologique : les notes/CC ont été injectées via `aseqsend` (port AL
 donc sans la latence/gigue USB du vrai Digitakt — à garder en tête en comparant au ressenti réel
 au clavier.
 
+## Interface web de pilotage (canal MIDI, sortie audio)
+
+Processus Flask séparé (`web/app.py`), zéro changement au chemin audio temps réel : la page
+réécrit `/etc/default/open303` et redémarre `open303.service` via un script sudo scopé
+(`web/open303-web-apply.sh` + règle sudoers dédiée, utilisateur système `open303-web` séparé de
+`open303`). Look terminal rétro (vert/ambre sur noir, ASCII). Pas d'authentification — documenté
+dans le README comme réservé à un réseau local de confiance.
+
+Deux nouveaux flags CLI (hors chemin RT, appliqués une fois au démarrage) rendent ça possible :
+`--audio-device SOUS-CHAINE` (force la sortie par nom) et `--list-devices` (affiche les
+périphériques et quitte, sert à peupler le menu déroulant).
+
+Oscilloscope initialement envisagé, abandonné : capturer le flux audio réel aurait exigé soit de
+retoucher le routage ALSA (risque de régression sur la latence/xruns tout juste validés), soit un
+tap lock-free dans le thread audio (accroc au principe "zéro changement au binaire" retenu ici).
+
+Bugs trouvés en installant sur le Pi :
+23. **`open303-web` sans le groupe `audio`.** RtAudio ne peut ouvrir aucun `/dev/snd/*` sans ce
+    groupe : `--list-devices` lancé par ce compte renvoyait "Aucune carte audio détectée", même
+    pour des devices non occupés en exclusif. `install-web.sh` l'ajoute maintenant.
+24. **Device actif absent de `--list-devices`.** RtAudio ne peut pas sonder un device déjà ouvert
+    en exclusif par `open303.service` — la carte USB active disparaissait de l'énumération tant
+    que le service tournait. `app.py` retrouve le device réellement actif via la dernière ligne
+    "Sortie audio: ..." des logs (`current_output_device()`) et l'ajoute à la liste s'il manque.
+
+Validé de bout en bout sur le Pi : page accessible (`http://192.168.1.64:8303`), changement de
+canal MIDI via le formulaire → écriture config → redémarrage → nouveau canal effectif confirmé
+dans les logs, remis ensuite sur "tous les canaux".
+
 ## Reste à faire
 
 Valider à l'oreille les CC20-29 et les 3 flags CLI (`--square-phase`/`--tanh-drive`/
