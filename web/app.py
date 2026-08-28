@@ -96,6 +96,16 @@ def current_midi_port():
     return match or ""
 
 
+def format_status(config_label, active_label):
+    """Une seule ligne d'affichage : la config si elle force un choix
+    explicite, sinon "auto" avec le choix reellement actif entre
+    parentheses ("auto" seul serait peu informatif -- ca ne dit pas lequel
+    des peripheriques disponibles a ete retenu)."""
+    if config_label:
+        return config_label
+    return f"auto ({active_label})" if active_label else "auto"
+
+
 def midi_port_label(name):
     """Meme regle que dans list_midi_ports() : c'est soit "Midi Through"
     (Wi-Fi via rtpmidid ou boucle locale), soit forcement un controleur USB
@@ -171,11 +181,10 @@ def index():
         "index.html",
         channel=channel,
         audio_device=audio_device,
-        active_device=current_output_device(),
+        audio_status=format_status(audio_device, current_output_device()),
         devices=list_audio_devices(),
         midi_port=midi_port,
-        midi_port_display=midi_port_label(midi_port),
-        active_midi_port=midi_port_label(current_midi_port()),
+        midi_status=format_status(midi_port_label(midi_port), midi_port_label(current_midi_port())),
         midi_ports=list_midi_ports(),
     )
 
