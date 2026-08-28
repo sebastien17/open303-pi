@@ -100,27 +100,17 @@
     cursor: pointer;
   }
   button:hover { background: var(--amber); color: #1a1200; }
-  .qr-box {
-    text-align: center;
-  }
-  .qr-box img {
-    background: var(--bg);
-    border: 1px solid var(--fg-dim);
-    padding: 8px;
-    width: 140px;
-    height: 140px;
-    display: block;
-    margin: 0 auto 8px;
-  }
-  .qr-box .caption {
-    color: var(--fg-dim);
-    letter-spacing: 1px;
-  }
   .footer {
     text-align: center;
     color: var(--fg-dim);
     margin-top: 24px;
     font-size: 12px;
+  }
+  .qr-footer {
+    display: block;
+    width: 100px;
+    height: 100px;
+    margin: 20px auto 0;
   }
 </style>
 </head>
@@ -128,11 +118,6 @@
   <div class="crt">
     <div class="banner">OPEN303-PI</div>
     <div class="subtitle">:: CONTROL PANEL ::</div>
-
-    <div class="box qr-box" data-title="MOBILE ACCESS">
-      <img src="{{ url_for('qr_png') }}" alt="Access QR code">
-      <div class="caption">scan to open this page on your phone</div>
-    </div>
 
     <div class="box" data-title="STATUS">
       <div class="row"><span>midi channel</span><span class="val">{{ "ALL" if channel is none else channel }}</span></div>
@@ -161,6 +146,7 @@
     </form>
 
     <div class="footer">open303-pi web control // restarts open303.service on every apply</div>
+    <img class="qr-footer" src="{{ url_for('qr_png') }}" alt="Access QR code">
   </div>
 </body>
 </html>
