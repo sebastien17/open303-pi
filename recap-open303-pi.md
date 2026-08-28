@@ -234,10 +234,49 @@ Validé de bout en bout sur le Pi : page accessible (`http://192.168.1.64:8303`)
 canal MIDI via le formulaire → écriture config → redémarrage → nouveau canal effectif confirmé
 dans les logs, remis ensuite sur "tous les canaux".
 
+Suite à quelques itérations de style sur cette page : titre "OPEN303-PI" en police retro VT323
+(Google Fonts, chargée côté client — fonctionne même Pi hors ligne), UI entièrement en anglais,
+QR code (généré côté serveur via `qrcode`, coloré pour matcher le thème : `#aaffbb` sur `#0b0f0a`)
+déplacé en bas de page sans cadre ni légende — juste l'image.
+
+## MIDI sans fil (rtpmidid) + sélecteur de port dans l'interface web
+
+25. **rtpmidid installé** (`.deb` précompilé, pas dans les dépôts Debian — `rtpmidid-debian-trixie-arm64-26.01.deb`,
+    correspond exactement à l'OS du Pi). Exporte par défaut `Midi Through` vers le réseau en
+    RTP-MIDI (annonce mDNS sous le nom d'hôte, port 5004) : n'importe quel logiciel RTP-MIDI du
+    réseau local peut alors jouer le 303 sans rien reconfigurer côté Pi.
+26. **Piège découvert en testant** : `aconnect -l` montre une souscription ALSA bidirectionnelle
+    entre `Midi Through` (14:0) et les ports internes de rtpmidid (`129:0 Network Export`,
+    `129:1 Announcements`), ce qui suggérait que s'abonner directement à `129:0` serait
+    équivalent. **Faux, vérifié empiriquement** (test CPU avant/après un `aseqsend` ciblé sur
+    `14:0` : aucune activité du synthé abonné à `129:0`, alors qu'un abonnement à `14:0` déclenche
+    bien le moteur DSP) — ce sont des ports de service internes à rtpmidid, pas un passthrough
+    générique comme le vrai port kernel `Midi Through`.
+27. **`pickMidiPort()` corrigé** pour exclure aussi les noms contenant "rtpmidid" de la sélection
+    automatique (en plus de "Midi Through" déjà exclu comme candidat "premier port" — la logique
+    de repli final reste "Midi Through" si rien d'autre n'est trouvé). Sans ce correctif, la
+    sélection automatique choisissait silencieusement un port rtpmidid non fonctionnel dès que le
+    service tournait (toujours présent, contrairement à un vrai contrôleur USB).
+28. **`--midi-port SOUS-CHAINE` / `--list-midi-ports`** ajoutés (même pattern que
+    `--audio-device`/`--list-devices`). Contrairement à l'audio, pas de souci de "port occupé" :
+    les ports de séquenceur ALSA acceptent plusieurs abonnés simultanés, `--list-midi-ports`
+    montre donc tout meme service tournant, sans logique de fusion supplémentaire côté web.
+29. **Sélecteur de port MIDI ajouté à l'interface web**, même schéma que le device audio (menu
+    déroulant peuplé via `--list-midi-ports`, filtré pour exclure les ports internes rtpmidid ;
+    écrit `--midi-port "NOM"` dans `EXTRA_ARGS`). Validé de bout en bout sur le Pi (sélection
+    explicite de `Midi Through` → confirmé dans les logs → remis sur auto).
+
+Pas testé : réception MIDI réelle depuis un vrai pair réseau (iPad/DAW en RTP-MIDI) — aucun
+appareil compatible disponible pendant cette session. Seul le mécanisme local (`Midi Through`
+comme point d'entrée partagé, cohérent avec la config `alsa_hw_auto_export` par défaut de
+rtpmidid) a pu être vérifié.
+
 ## Reste à faire
 
-Valider à l'oreille les CC20-29 et les 3 flags CLI (`--square-phase`/`--tanh-drive`/
-`--tanh-offset`), pas encore testés. Rien d'autre d'identifié.
+- Valider à l'oreille les CC20-29 et les 3 flags CLI (`--square-phase`/`--tanh-drive`/
+  `--tanh-offset`), pas encore testés.
+- Valider une vraie connexion RTP-MIDI entrante depuis un pair réseau (iPad, DAW...) — non testé
+  faute de matériel compatible disponible.
 
 ## À valider à l'oreille sur le Pi
 
