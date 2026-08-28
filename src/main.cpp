@@ -330,6 +330,12 @@ void printUsage(const char* progName) {
       "                   une sortie embarquee du Pi.\n"
       "  --list-devices   Affiche les peripheriques audio disponibles et quitte\n"
       "                   (n'ouvre ni MIDI ni flux audio).\n"
+      "  --midi-port S    Force le port MIDI dont le nom contient la sous-chaine\n"
+      "                   S (ex: \"Digitakt\", ou le nom d'une session rtpmidid).\n"
+      "                   Sans correspondance, repli sur la selection\n"
+      "                   automatique avec avertissement. Par defaut : le\n"
+      "                   premier port qui n'est pas \"Midi Through\".\n"
+      "  --list-midi-ports Affiche les ports MIDI disponibles et quitte.\n"
       "  -h, --help       Affiche cette aide et quitte.\n"
       "\n"
       "Exemples :\n"
@@ -337,25 +343,47 @@ void printUsage(const char* progName) {
       "  %s 44100 128 --rt\n"
       "  %s 48000 256 --channel 0\n"
       "  %s --list-devices\n"
-      "  %s --audio-device USB\n",
-      progName, progName, progName, progName, progName, progName);
+      "  %s --audio-device USB\n"
+      "  %s --midi-port Digitakt\n",
+      progName, progName, progName, progName, progName, progName, progName);
 }
 
-int pickMidiPort(RtMidiIn& midiin) {
+// preferredSubstring (optionnel, cf --midi-port) force le choix du premier
+// port dont le nom la contient -- utile pour choisir explicitement entre un
+// controleur USB et une session reseau rtpmidid (cf README section MIDI
+// sans fil). Repli silencieux sur la logique automatique ci-dessous si rien
+// ne correspond, comme pour --audio-device.
+int pickMidiPort(RtMidiIn& midiin, const std::string& preferredSubstring = "") {
   unsigned int nPorts = midiin.getPortCount();
   if (nPorts == 0) {
     std::fprintf(stderr, "Aucun port MIDI trouve. Branchez votre interface USB MIDI.\n");
     return -1;
   }
   std::printf("Ports MIDI disponibles:\n");
+  int preferredMatch = -1;
   for (unsigned int i = 0; i < nPorts; ++i) {
-    std::printf("  [%u] %s\n", i, midiin.getPortName(i).c_str());
+    const std::string name = midiin.getPortName(i);
+    std::printf("  [%u] %s\n", i, name.c_str());
+    if (!preferredSubstring.empty() && preferredMatch < 0 &&
+        name.find(preferredSubstring) != std::string::npos) {
+      preferredMatch = static_cast<int>(i);
+    }
+  }
+  if (!preferredSubstring.empty()) {
+    if (preferredMatch >= 0) return preferredMatch;
+    std::fprintf(stderr,
+                 "--midi-port: aucun port ne contient \"%s\", repli sur la selection "
+                 "automatique.\n",
+                 preferredSubstring.c_str());
   }
   // "Midi Through" est un port virtuel cree par le noyau ALSA, toujours
   // present en position 0, et ne correspond a aucun materiel branche. Le
   // prendre par defaut (comme le faisait un simple "return 0") revient a
   // ignorer silencieusement le vrai controleur USB des qu'il en existe un.
-  // On prend donc le premier port qui n'est PAS "Midi Through".
+  // On prend donc le premier port qui n'est PAS "Midi Through". Note :
+  // rtpmidid exporte par defaut "Midi Through" sur le reseau (RTP-MIDI), donc
+  // ce meme port sert aussi de point d'entree pour le MIDI recu en Wi-Fi
+  // quand aucun controleur USB n'est branche.
   for (unsigned int i = 0; i < nPorts; ++i) {
     if (midiin.getPortName(i).find("Midi Through") == std::string::npos) {
       return static_cast<int>(i);
@@ -448,6 +476,8 @@ int main(int argc, char** argv) {
 
   bool listDevices = false;
   std::string audioDeviceFilter;
+  bool listMidiPorts = false;
+  std::string midiPortFilter;
 
   // Args positionnels (sampleRate, bufferFrames) et flags (--xxx) sont
   // distingues explicitement : sans ca, "open303_pi_host --sine" envoyait
@@ -483,6 +513,14 @@ int main(int argc, char** argv) {
       audioDeviceFilter = argv[i];
     } else if (std::strcmp(argv[i], "--list-devices") == 0) {
       listDevices = true;
+    } else if (std::strcmp(argv[i], "--midi-port") == 0) {
+      if (++i >= argc) {
+        std::fprintf(stderr, "--midi-port attend une sous-chaine du nom du port\n");
+        return 1;
+      }
+      midiPortFilter = argv[i];
+    } else if (std::strcmp(argv[i], "--list-midi-ports") == 0) {
+      listMidiPorts = true;
     } else if (std::strcmp(argv[i], "--square-phase") == 0) {
       if (++i >= argc) {
         std::fprintf(stderr, "--square-phase attend une valeur en degres\n");
@@ -536,6 +574,16 @@ int main(int argc, char** argv) {
     return 0;
   }
 
+  // --- Mode diagnostic : liste les ports MIDI et quitte ---
+  // Meme principe que --list-devices : les noms affiches sont exactement
+  // ceux que verrait le vrai lancement (y compris un port rtpmidid une fois
+  // qu'une session reseau est etablie -- cf README section MIDI sans fil).
+  if (listMidiPorts) {
+    RtMidiIn midiinList;
+    pickMidiPort(midiinList);
+    return 0;
+  }
+
   // --- Init du moteur DSP ---
   // (avant l'ouverture du flux audio : aucun autre thread ne touche encore
   // gSynth a ce stade, donc pas de synchronisation necessaire)
@@ -562,7 +610,7 @@ int main(int argc, char** argv) {
 
   // --- Ouverture du port MIDI USB ---
   RtMidiIn midiin;
-  int portIndex = pickMidiPort(midiin);
+  int portIndex = pickMidiPort(midiin, midiPortFilter);
   if (portIndex < 0) return 1;
   midiin.openPort(portIndex);
   midiin.setCallback(&handleMidiMessage);
