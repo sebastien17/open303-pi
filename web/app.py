@@ -104,7 +104,17 @@ def list_midi_ports():
     menu ne ferait que produire un choix qui semble valide mais ne recoit
     jamais rien. "Midi Through" reste propose : c'est le point d'entree reel
     aussi bien pour un controleur USB que pour le MIDI recu via rtpmidid
-    (cf commentaires dans pickMidiPort(), src/main.cpp)."""
+    (cf commentaires dans pickMidiPort(), src/main.cpp).
+
+    Retourne des dicts {value, label} plutot que de simples chaines : les
+    noms ALSA bruts ("Midi Through:...", "Elektron Digitakt II:...24:0") ne
+    disent rien d'explicite a l'utilisateur sur USB vs Wi-Fi. On ne peut pas
+    distinguer plus finement au niveau ALSA -- tout port qui n'est ni
+    "Midi Through" ni interne a rtpmidid est, dans ce projet, forcement un
+    controleur MIDI classe USB reel -- donc le label se resume a ces deux
+    cas. Seul le label affiche est enjolive : la valeur soumise au
+    formulaire (matchee cote binaire par sous-chaine) reste le nom ALSA
+    exact."""
     try:
         out = subprocess.run(
             [BINARY, "--list-midi-ports"], capture_output=True, text=True, timeout=5
@@ -114,8 +124,11 @@ def list_midi_ports():
     ports = []
     for line in out.splitlines():
         m = re.match(r"\s*\[(\d+)\]\s+(.*)", line)
-        if m and "rtpmidid" not in m.group(2):
-            ports.append(m.group(2).strip())
+        if not m or "rtpmidid" in m.group(2):
+            continue
+        name = m.group(2).strip()
+        label = "WiFi (rtpmidid)" if "Midi Through" in name else f"USB: {name}"
+        ports.append({"value": name, "label": label})
     return ports
 
 

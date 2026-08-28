@@ -140,7 +140,7 @@
       <select name="midi_port" id="midi_port">
         <option value="" {{ "selected" if not midi_port }}>auto (prefers a real USB controller)</option>
         {% for p in midi_ports %}
-        <option value="{{ p }}" {{ "selected" if p == midi_port }}>{{ p }}</option>
+        <option value="{{ p.value }}" {{ "selected" if p.value == midi_port }}>{{ p.label }}</option>
         {% endfor %}
       </select>
 
