@@ -8,10 +8,12 @@ et systemd/open303-web.sudoers). Aucun etat partage avec le thread audio
 temps reel.
 """
 
+import io
 import re
 import subprocess
 
-from flask import Flask, abort, redirect, render_template, request, url_for
+import qrcode
+from flask import Flask, abort, redirect, render_template, request, send_file, url_for
 
 DEFAULT_FILE = "/etc/default/open303"
 BINARY = "/usr/local/bin/open303_pi_host"
@@ -103,22 +105,35 @@ def index():
     )
 
 
+@app.route("/qr.png")
+def qr_png():
+    """QR code pointant vers l'URL reellement utilisee pour acceder a la
+    page (request.url_root reprend le Host: envoye par le client, donc
+    l'IP/port effectivement joignables sur le reseau local) -- genere a la
+    volee, pas de cache, l'IP du Pi pouvant changer entre deux boots."""
+    img = qrcode.make(request.url_root, border=2)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
+
 @app.route("/apply", methods=["POST"])
 def apply():
     channel_raw = request.form.get("channel", "all")
     audio_device = request.form.get("audio_device", "").strip()
 
     if not AUDIO_DEVICE_RE.match(audio_device):
-        abort(400, "Nom de peripherique invalide.")
+        abort(400, "Invalid device name.")
 
     extra_args = ""
     if channel_raw != "all":
         try:
             channel = int(channel_raw)
         except ValueError:
-            abort(400, "Canal MIDI invalide.")
+            abort(400, "Invalid MIDI channel.")
         if not 0 <= channel <= 15:
-            abort(400, "Canal MIDI invalide (0-15 attendu).")
+            abort(400, "Invalid MIDI channel (expected 0-15).")
         extra_args += f"--channel {channel} "
     if audio_device:
         extra_args += f'--audio-device "{audio_device}" '

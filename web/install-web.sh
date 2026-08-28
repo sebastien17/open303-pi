@@ -15,9 +15,9 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-if ! python3 -c "import flask" 2>/dev/null; then
-  echo "Module Python 'flask' introuvable. Installez-le d'abord :" >&2
-  echo "  sudo apt install -y python3-flask" >&2
+if ! python3 -c "import flask, qrcode" 2>/dev/null; then
+  echo "Modules Python 'flask'/'qrcode' introuvables. Installez-les d'abord :" >&2
+  echo "  sudo apt install -y python3-flask python3-qrcode" >&2
   exit 1
 fi
 

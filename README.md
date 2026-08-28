@@ -334,7 +334,7 @@ Deux nouveaux flags CLI la rendent possible :
 
 **Installation** (apres `systemd/install-service.sh`, sur le Pi) :
 ```bash
-sudo apt install -y python3-flask
+sudo apt install -y python3-flask python3-qrcode
 sudo web/install-web.sh
 ```
 L'interface est alors accessible sur `http://<ip-du-pi>:8303`.

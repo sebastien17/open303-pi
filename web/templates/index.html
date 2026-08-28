@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -100,15 +100,21 @@
     cursor: pointer;
   }
   button:hover { background: var(--amber); color: #1a1200; }
-  .cursor {
-    display: inline-block;
-    width: 9px;
-    height: 1em;
-    background: var(--fg);
-    vertical-align: text-bottom;
-    animation: blink 1s steps(1) infinite;
+  .qr-box {
+    text-align: center;
   }
-  @keyframes blink { 50% { opacity: 0; } }
+  .qr-box img {
+    background: #fff;
+    padding: 8px;
+    width: 140px;
+    height: 140px;
+    display: block;
+    margin: 0 auto 8px;
+  }
+  .qr-box .caption {
+    color: var(--fg-dim);
+    letter-spacing: 1px;
+  }
   .footer {
     text-align: center;
     color: var(--fg-dim);
@@ -120,35 +126,40 @@
 <body>
   <div class="crt">
     <div class="banner">OPEN303-PI</div>
-    <div class="subtitle">:: PANNEAU DE CONTROLE ::<span class="cursor"></span></div>
+    <div class="subtitle">:: CONTROL PANEL ::</div>
 
-    <div class="box" data-title="ETAT ACTUEL">
-      <div class="row"><span>canal midi</span><span class="val">{{ "TOUS" if channel is none else channel }}</span></div>
-      <div class="row"><span>sortie audio (config)</span><span class="val">{{ audio_device if audio_device else "auto" }}</span></div>
-      <div class="row"><span>sortie audio (active)</span><span class="val">{{ active_device if active_device else "?" }}</span></div>
+    <div class="box qr-box" data-title="MOBILE ACCESS">
+      <img src="{{ url_for('qr_png') }}" alt="Access QR code">
+      <div class="caption">scan to open this page on your phone</div>
+    </div>
+
+    <div class="box" data-title="STATUS">
+      <div class="row"><span>midi channel</span><span class="val">{{ "ALL" if channel is none else channel }}</span></div>
+      <div class="row"><span>audio output (config)</span><span class="val">{{ audio_device if audio_device else "auto" }}</span></div>
+      <div class="row"><span>audio output (active)</span><span class="val">{{ active_device if active_device else "?" }}</span></div>
     </div>
 
     <form class="box" data-title="CONFIGURATION" method="post" action="{{ url_for('apply') }}">
-      <label for="channel">canal midi ecoute</label>
+      <label for="channel">midi channel to listen on</label>
       <select name="channel" id="channel">
-        <option value="all" {{ "selected" if channel is none }}>tous les canaux</option>
+        <option value="all" {{ "selected" if channel is none }}>all channels</option>
         {% for n in range(16) %}
-        <option value="{{ n }}" {{ "selected" if channel == n }}>canal {{ n }}</option>
+        <option value="{{ n }}" {{ "selected" if channel == n }}>channel {{ n }}</option>
         {% endfor %}
       </select>
 
-      <label for="audio_device">peripherique de sortie</label>
+      <label for="audio_device">audio output device</label>
       <select name="audio_device" id="audio_device">
-        <option value="" {{ "selected" if not audio_device }}>auto (evite la sortie embarquee)</option>
+        <option value="" {{ "selected" if not audio_device }}>auto (avoids onboard output)</option>
         {% for d in devices %}
         <option value="{{ d }}" {{ "selected" if d == audio_device }}>{{ d }}</option>
         {% endfor %}
       </select>
 
-      <button type="submit">&gt; APPLIQUER &amp; REDEMARRER</button>
+      <button type="submit">&gt; APPLY &amp; RESTART</button>
     </form>
 
-    <div class="footer">open303-pi web control // redemarre open303.service a chaque application</div>
+    <div class="footer">open303-pi web control // restarts open303.service on every apply</div>
   </div>
 </body>
 </html>
