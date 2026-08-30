@@ -225,7 +225,7 @@ Pi 4/5. Quelques ajustements par rapport au reste du guide :
 | CC20                 | Attaque enveloppe filtre, notes non accentuees (0.3-30 ms) |
 | CC21                 | Attaque enveloppe filtre, notes accentuees (0.3-30 ms) |
 | CC22                 | Highpass avant le filtre principal (0-500 Hz) |
-| CC23                 | Highpass dans la boucle de feedback du filtre (0-500 Hz) |
+| CC23                 | Highpass dans la boucle de feedback du filtre (0-150 Hz, defaut moteur en butee haute) |
 | CC24                 | Highpass apres le filtre principal (0-500 Hz) |
 | CC25                 | Sustain de l'enveloppe d'amplitude (-60-0 dB) |
 | CC26                 | Decay de l'enveloppe d'amplitude (16-3000 ms) |
