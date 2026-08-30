@@ -175,13 +175,16 @@ void applyMidiEvent(const MidiEvent& ev) {
           gSynth.setPreFilterHighpass(500.0 * v01);
           break;
         case 23:  // Highpass dans la boucle de feedback du filtre (Hz).
-                  // Plage 0-150 Hz (defaut moteur 150 Hz = butee haute).
-                  // Resserree depuis 0-500 Hz apres test a l'oreille : sur
-                  // une note grave a forte resonance, l'effet n'est plus
-                  // perceptible au-dela de ~50 Hz (il ne reste presque plus
-                  // d'energie a retirer dans la boucle de feedback a ces
-                  // frequences), donc les 2/3 hauts du knob etaient inutiles.
-          gSynth.setFeedbackHighpass(150.0 * v01);
+                  // Plage 0-60 Hz, resserree en deux temps apres tests a
+                  // l'oreille (note grave, forte resonance) : d'abord depuis
+                  // 0-500 Hz vers 0-150 Hz, puis vers 0-60 Hz -- l'effet
+                  // cesse d'etre perceptible des ~40 Hz (il ne reste presque
+                  // plus d'energie a retirer dans la boucle de feedback
+                  // au-dela). Consequence assumee : le defaut moteur
+                  // (150 Hz) n'est plus atteignable par CC, mais il est de
+                  // toute facon inaudible -- on prefere un knob entierement
+                  // utile sur toute sa course.
+          gSynth.setFeedbackHighpass(60.0 * v01);
           break;
         case 24:  // Highpass apres le filtre principal (Hz). Defaut moteur :
                   // ~24.2 Hz.
