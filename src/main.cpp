@@ -228,6 +228,21 @@ void applyMidiEvent(const MidiEvent& ev) {
           gSynth.setAccent(100.0 * v01);
           break;
 
+        case 123:  // All Notes Off (CC standard MIDI). Emis aussi en interne
+                   // lors d'un rebranchement de port MIDI : si la session
+                   // reseau tombe pendant qu'une note est tenue, le note-off
+                   // n'arrive jamais et la note reste bloquee -- le moteur
+                   // tourne alors indefiniment (constate en pratique : CPU
+                   // anormalement eleve au repos).
+                   //
+                   // NB: allNotesOff() vide une std::list, donc liberation
+                   // memoire dans le thread audio. Ce n'est pas ideal en
+                   // temps reel, mais ca n'introduit pas de nouveau probleme :
+                   // noteOn() y fait deja un push_front() (allocation) a
+                   // chaque note dans ce meme thread.
+          gSynth.allNotesOff();
+          break;
+
         default:
           break;  // CC non mappe : ignore
       }
@@ -404,17 +419,22 @@ void printUsage(const char* progName) {
 // controleur USB et une session reseau rtpmidid (cf README section MIDI
 // sans fil). Repli silencieux sur la logique automatique ci-dessous si rien
 // ne correspond, comme pour --audio-device.
-int pickMidiPort(RtMidiIn& midiin, const std::string& preferredSubstring = "") {
+// verbose == false : selection silencieuse, utilisee par la surveillance
+// periodique de la topologie ALSA (cf boucle principale) qui tourne toutes
+// les 2 s et ne doit pas inonder les logs.
+int pickMidiPort(RtMidiIn& midiin, const std::string& preferredSubstring = "", bool verbose = true) {
   unsigned int nPorts = midiin.getPortCount();
   if (nPorts == 0) {
-    std::fprintf(stderr, "Aucun port MIDI trouve. Branchez votre interface USB MIDI.\n");
+    if (verbose) {
+      std::fprintf(stderr, "Aucun port MIDI trouve. Branchez votre interface USB MIDI.\n");
+    }
     return -1;
   }
-  std::printf("Ports MIDI disponibles:\n");
+  if (verbose) std::printf("Ports MIDI disponibles:\n");
   int preferredMatch = -1;
   for (unsigned int i = 0; i < nPorts; ++i) {
     const std::string name = midiin.getPortName(i);
-    std::printf("  [%u] %s\n", i, name.c_str());
+    if (verbose) std::printf("  [%u] %s\n", i, name.c_str());
     if (!preferredSubstring.empty() && preferredMatch < 0 &&
         name.find(preferredSubstring) != std::string::npos) {
       preferredMatch = static_cast<int>(i);
@@ -422,10 +442,12 @@ int pickMidiPort(RtMidiIn& midiin, const std::string& preferredSubstring = "") {
   }
   if (!preferredSubstring.empty()) {
     if (preferredMatch >= 0) return preferredMatch;
-    std::fprintf(stderr,
-                 "--midi-port: aucun port ne contient \"%s\", repli sur la selection "
-                 "automatique.\n",
-                 preferredSubstring.c_str());
+    if (verbose) {
+      std::fprintf(stderr,
+                   "--midi-port: aucun port ne contient \"%s\", repli sur la selection "
+                   "automatique.\n",
+                   preferredSubstring.c_str());
+    }
   }
   // "Midi Through" est un port virtuel cree par le noyau ALSA, toujours
   // present en position 0, et ne correspond a aucun materiel branche. Le
@@ -731,6 +753,22 @@ int main(int argc, char** argv) {
   std::printf("Open303 pret. Buffer=%u frames @ %.0f Hz (latence ~%.1f ms). Ctrl+C pour quitter.\n",
               bufferFrames, sampleRate, 1000.0 * bufferFrames / sampleRate);
 
+  // --- Surveillance de la topologie MIDI ALSA ---
+  // rtpmidid cree un NOUVEAU port ALSA a chaque connexion/decouverte reseau
+  // et ne nettoie pas toujours les anciens. Un abonnement pris une seule fois
+  // au demarrage devient donc silencieusement orphelin des que la session
+  // reseau bouge : plus aucune note recue, sans le moindre message d'erreur
+  // (constate en pratique apres chaque reconnexion Wi-Fi -- il fallait
+  // relancer le service a la main). On resonde donc periodiquement la liste
+  // des ports et on se rebranche des que le port retenu change.
+  //
+  // Effet de bord bienvenu : gere aussi le hot-plug d'un controleur USB, qui
+  // ne dependait jusqu'ici que de la regle udev redemarrant tout le service.
+  std::string currentPortName = midiin.getPortName(portIndex);
+  int currentPortIndex = portIndex;
+  int pollTicks = 0;
+  constexpr int kPollEveryTicks = 10;  // 10 x 200 ms = ~2 s
+
   unsigned lastDropped = 0;
   while (gKeepRunning) {
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -741,6 +779,34 @@ int main(int argc, char** argv) {
       std::fprintf(stderr, "[midi] %u evenement(s) MIDI perdu(s) (file pleine)\n", dropped);
       lastDropped = dropped;
     }
+
+    if (++pollTicks < kPollEveryTicks) continue;
+    pollTicks = 0;
+
+    const int desired = pickMidiPort(midiin, midiPortFilter, /*verbose=*/false);
+    if (desired < 0) continue;  // plus aucun port : on garde l'abonnement actuel
+    const std::string desiredName = midiin.getPortName(static_cast<unsigned int>(desired));
+    if (desired == currentPortIndex && desiredName == currentPortName) continue;
+
+    std::printf("[midi] topologie ALSA modifiee : rebranchement sur \"%s\" (index %d) "
+                "-- etait \"%s\" (index %d)\n",
+                desiredName.c_str(), desired, currentPortName.c_str(), currentPortIndex);
+
+    midiin.closePort();
+    // Le thread de callback RtMidi est arrete par closePort() : nous sommes
+    // ici momentanement le SEUL producteur de la file, on peut donc y pousser
+    // sans casser l'hypothese SPSC du ring buffer.
+    MidiEvent panic;
+    panic.status = 0xB0;
+    panic.data1  = 123;  // All Notes Off : evite une note bloquee (cf case 123)
+    panic.data2  = 0;
+    pushMidiEvent(panic);
+    midiin.openPort(static_cast<unsigned int>(desired));
+    // Ni setCallback() ni ignoreTypes() a refaire : RtMidi les stocke sur
+    // l'objet et non sur le port, ils survivent au closePort/openPort (les
+    // rappeler declencherait meme un avertissement "callback already set").
+    currentPortIndex = desired;
+    currentPortName  = desiredName;
   }
 
   dac.stopStream();
