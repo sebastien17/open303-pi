@@ -15,6 +15,13 @@ SupplementaryGroups=audio
 EnvironmentFile=-/etc/default/open303
 ExecStart=/usr/local/bin/open303_pi_host ${SAMPLE_RATE} ${BUFFER_FRAMES} $EXTRA_ARGS
 
+# Cree /run/open303 (tmpfs, donc en RAM) appartenant a l'utilisateur du
+# service, et le supprime a l'arret. Sert de destination a --meter-file :
+# l'interface web y lit le niveau audio sans avoir a lancer un `journalctl`
+# en boucle, ce qui volerait du CPU au thread temps reel sur un Pi 3B+.
+RuntimeDirectory=open303
+RuntimeDirectoryMode=0755
+
 # Redemarre automatiquement si aucun port MIDI n'est trouve au lancement
 # (ex: Digitakt pas encore branche) ou en cas de crash/xrun fatal.
 Restart=on-failure

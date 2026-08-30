@@ -428,6 +428,10 @@ void printUsage(const char* progName) {
       "                   rien\" (silence alors que des notes arrivent) de \"le\n"
       "                   moteur produit du signal mais on n'entend rien\"\n"
       "                   (probleme en aval : carte son, cablage, volume).\n"
+      "  --meter-file P   Ecrit ce meme niveau crete dans le fichier P toutes\n"
+      "                   les 200 ms (sans l'afficher). Prevu pour /run (tmpfs),\n"
+      "                   lu par l'interface web. Ecriture faite depuis la\n"
+      "                   boucle principale, jamais depuis le thread audio.\n"
       "  -h, --help       Affiche cette aide et quitte.\n"
       "\n"
       "Exemples :\n"
@@ -596,6 +600,7 @@ int main(int argc, char** argv) {
   std::string audioDeviceFilter;
   bool listMidiPorts = false;
   bool showMeter = false;
+  std::string meterFile;
   std::string midiPortFilter;
 
   // Args positionnels (sampleRate, bufferFrames) et flags (--xxx) sont
@@ -642,6 +647,12 @@ int main(int argc, char** argv) {
       listMidiPorts = true;
     } else if (std::strcmp(argv[i], "--meter") == 0) {
       showMeter = true;
+    } else if (std::strcmp(argv[i], "--meter-file") == 0) {
+      if (++i >= argc) {
+        std::fprintf(stderr, "--meter-file attend un chemin\n");
+        return 1;
+      }
+      meterFile = argv[i];
     } else if (std::strcmp(argv[i], "--square-phase") == 0) {
       if (++i >= argc) {
         std::fprintf(stderr, "--square-phase attend une valeur en degres\n");
@@ -809,14 +820,34 @@ int main(int argc, char** argv) {
       lastDropped = dropped;
     }
 
-    if (showMeter) {
+    if (showMeter || !meterFile.empty()) {
       // Remise a zero atomique : on lit ET on reinitialise, pour que chaque
-      // ligne rapporte la crete des 200 dernieres ms seulement.
+      // releve porte sur les 200 dernieres ms seulement.
+      //
+      // IMPORTANT : tout ce bloc s'execute dans la boucle principale, JAMAIS
+      // dans le callback audio. Le thread temps reel se contente d'un max de
+      // valeurs absolues + un CAS atomique (deja deploye et mesure sans le
+      // moindre xrun) ; l'ecriture fichier et le formatage restent ici.
       const float peak = gPeakLevel.exchange(0.0f, std::memory_order_relaxed);
-      if (peak > 0.0f) {
-        std::printf("[meter] crete %.4f (%.1f dBFS)\n", peak, 20.0 * std::log10(peak));
-      } else {
-        std::printf("[meter] silence (0.0000)\n");
+
+      if (!meterFile.empty()) {
+        // Destination attendue : /run (tmpfs, donc en RAM -- aucune usure de
+        // la carte SD malgre une ecriture toutes les 200 ms). Lu par
+        // l'interface web, qui evite ainsi de lancer un `journalctl` en
+        // boucle : sur un Pi 3B+, un sous-processus 2 fois par seconde
+        // volerait du CPU au thread audio.
+        if (FILE* f = std::fopen(meterFile.c_str(), "w")) {
+          std::fprintf(f, "%.6f\n", peak);
+          std::fclose(f);
+        }
+      }
+
+      if (showMeter) {
+        if (peak > 0.0f) {
+          std::printf("[meter] crete %.4f (%.1f dBFS)\n", peak, 20.0 * std::log10(peak));
+        } else {
+          std::printf("[meter] silence (0.0000)\n");
+        }
       }
     }
 

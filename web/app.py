@@ -9,6 +9,7 @@ temps reel.
 """
 
 import io
+import math
 import re
 import subprocess
 
@@ -18,6 +19,11 @@ from flask import Flask, abort, redirect, render_template, request, send_file, u
 DEFAULT_FILE = "/etc/default/open303"
 BINARY = "/usr/local/bin/open303_pi_host"
 APPLY_SCRIPT = "/usr/local/sbin/open303-web-apply.sh"
+# Ecrit par open303_pi_host --meter-file, dans /run (tmpfs = RAM). Volontairement
+# un simple fichier : le lire coute une poignee de microsecondes, alors qu'un
+# `journalctl` lance 2 fois par seconde pour la meme information volerait du CPU
+# au thread audio temps reel sur un Pi 3B+.
+METER_FILE = "/run/open303/level"
 
 # Caracteres attendus dans un nom de peripherique ALSA/RtAudio/RtMidi (ex:
 # "KT USB Audio (USB Audio)", "Elektron Digitakt II:...24:0"). Pas
@@ -187,6 +193,22 @@ def index():
         midi_status=format_status(midi_port_label(midi_port), midi_port_label(current_midi_port())),
         midi_ports=list_midi_ports(),
     )
+
+
+@app.route("/api/meter")
+def api_meter():
+    """Niveau crete de la sortie audio, relu depuis METER_FILE.
+
+    Volontairement minimal (une lecture de ~10 octets en RAM, pas de
+    sous-processus) : cet endpoint est interroge en boucle par la page, et
+    tourne sur le meme Pi que le thread audio temps reel."""
+    try:
+        with open(METER_FILE) as f:
+            peak = float(f.read().strip())
+    except (FileNotFoundError, ValueError, OSError):
+        return {"available": False, "peak": 0.0, "dbfs": None}
+    dbfs = 20.0 * math.log10(peak) if peak > 0.0 else None
+    return {"available": True, "peak": peak, "dbfs": dbfs}
 
 
 @app.route("/qr.png")

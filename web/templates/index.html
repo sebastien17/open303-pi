@@ -123,6 +123,7 @@
       <div class="row"><span>midi channel</span><span class="val">{{ "ALL" if channel is none else channel }}</span></div>
       <div class="row"><span>midi port</span><span class="val">{{ midi_status }}</span></div>
       <div class="row"><span>audio output</span><span class="val">{{ audio_status }}</span></div>
+      <div class="row"><span>output level</span><span class="val" id="meter">----------------  --</span></div>
     </div>
 
     <form class="box" data-title="CONFIGURATION" method="post" action="{{ url_for('apply') }}">
@@ -156,5 +157,42 @@
     <div class="footer">open303-pi web control // restarts open303.service on every apply</div>
     <img class="qr-footer" src="{{ url_for('qr_png') }}" alt="Access QR code">
   </div>
+<script>
+// Vumetre : lit /api/meter (simple lecture d'un fichier en RAM cote serveur,
+// pas de sous-processus) et dessine une barre facon terminal. Intervalle
+// volontairement modeste (500 ms) : la page tourne sur le meme Pi que le
+// thread audio temps reel, on ne veut pas lui disputer du CPU.
+(function () {
+  var el = document.getElementById('meter');
+  if (!el) return;
+  var WIDTH = 16;
+
+  function draw(data) {
+    if (!data.available) {
+      el.textContent = '(--meter-file inactif)';
+      return;
+    }
+    // Echelle en dBFS : -48 dB (vide) a 0 dB (plein), plus lisible qu'une
+    // echelle lineaire ou tout se tasse en bas.
+    var filled = 0;
+    if (data.dbfs !== null) {
+      filled = Math.round(WIDTH * Math.max(0, Math.min(1, (data.dbfs + 48) / 48)));
+    }
+    var bar = '';
+    for (var i = 0; i < WIDTH; i++) bar += (i < filled ? '#' : '-');
+    var label = (data.dbfs === null) ? ' --' : ' ' + data.dbfs.toFixed(1) + ' dBFS';
+    el.textContent = bar + label;
+  }
+
+  function poll() {
+    fetch('/api/meter', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(draw)
+      .catch(function () { el.textContent = '(hors ligne)'; });
+  }
+  poll();
+  setInterval(poll, 500);
+})();
+</script>
 </body>
 </html>
