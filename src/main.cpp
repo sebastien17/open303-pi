@@ -36,6 +36,17 @@ rosic::Open303 gSynth;
 std::atomic<bool> gKeepRunning{true};
 std::atomic<bool> gSineTestMode{false};
 std::atomic<bool> gEnableRealtime{false};
+
+// Niveau crete du bloc audio, publie par le thread temps reel et lu par la
+// boucle principale (cf --meter). Sert a distinguer sans ambiguite deux
+// causes de "pas de son" qui se ressemblent de l'exterieur :
+//   - le moteur DSP ne produit rien (niveau a 0 alors que des notes
+//     arrivent) -> probleme de parametres/MIDI ;
+//   - le moteur produit bien du signal mais on n'entend rien -> probleme
+//     en aval (carte son, cablage, volume materiel).
+// Un simple max de valeurs absolues : pas d'allocation ni de verrou, donc
+// sans danger dans le callback audio.
+std::atomic<float> gPeakLevel{0.0f};
 double gSinePhase = 0.0;
 // Fixe avant l'ouverture du flux (donc avant que le thread audio existe) :
 // pas de synchronisation necessaire pour cette lecture depuis audioCallback.
@@ -352,10 +363,20 @@ int audioCallback(void* outputBuffer, void* /*inputBuffer*/, unsigned int nFrame
     return 0;
   }
 
+  float peak = 0.0f;
   for (unsigned int i = 0; i < nFrames; ++i) {
     float s = static_cast<float>(gSynth.getSample());
     out[2 * i + 0] = s;  // gauche
     out[2 * i + 1] = s;  // droite (mono duplique)
+    const float a = std::fabs(s);
+    if (a > peak) peak = a;
+  }
+  // Publication du niveau crete pour --meter. On garde le maximum observe
+  // depuis la derniere lecture (la boucle principale remet a zero), sinon un
+  // bloc silencieux effacerait la crete d'une note jouee juste avant.
+  float previous = gPeakLevel.load(std::memory_order_relaxed);
+  while (peak > previous &&
+         !gPeakLevel.compare_exchange_weak(previous, peak, std::memory_order_relaxed)) {
   }
   return 0;
 }
@@ -402,6 +423,11 @@ void printUsage(const char* progName) {
       "                   automatique avec avertissement. Par defaut : le\n"
       "                   premier port qui n'est pas \"Midi Through\".\n"
       "  --list-midi-ports Affiche les ports MIDI disponibles et quitte.\n"
+      "  --meter          Affiche le niveau crete de la sortie audio toutes les\n"
+      "                   200 ms. Diagnostic : distingue \"le moteur ne produit\n"
+      "                   rien\" (silence alors que des notes arrivent) de \"le\n"
+      "                   moteur produit du signal mais on n'entend rien\"\n"
+      "                   (probleme en aval : carte son, cablage, volume).\n"
       "  -h, --help       Affiche cette aide et quitte.\n"
       "\n"
       "Exemples :\n"
@@ -569,6 +595,7 @@ int main(int argc, char** argv) {
   bool listDevices = false;
   std::string audioDeviceFilter;
   bool listMidiPorts = false;
+  bool showMeter = false;
   std::string midiPortFilter;
 
   // Args positionnels (sampleRate, bufferFrames) et flags (--xxx) sont
@@ -613,6 +640,8 @@ int main(int argc, char** argv) {
       midiPortFilter = argv[i];
     } else if (std::strcmp(argv[i], "--list-midi-ports") == 0) {
       listMidiPorts = true;
+    } else if (std::strcmp(argv[i], "--meter") == 0) {
+      showMeter = true;
     } else if (std::strcmp(argv[i], "--square-phase") == 0) {
       if (++i >= argc) {
         std::fprintf(stderr, "--square-phase attend une valeur en degres\n");
@@ -778,6 +807,17 @@ int main(int argc, char** argv) {
     if (dropped != lastDropped) {
       std::fprintf(stderr, "[midi] %u evenement(s) MIDI perdu(s) (file pleine)\n", dropped);
       lastDropped = dropped;
+    }
+
+    if (showMeter) {
+      // Remise a zero atomique : on lit ET on reinitialise, pour que chaque
+      // ligne rapporte la crete des 200 dernieres ms seulement.
+      const float peak = gPeakLevel.exchange(0.0f, std::memory_order_relaxed);
+      if (peak > 0.0f) {
+        std::printf("[meter] crete %.4f (%.1f dBFS)\n", peak, 20.0 * std::log10(peak));
+      } else {
+        std::printf("[meter] silence (0.0000)\n");
+      }
     }
 
     if (++pollTicks < kPollEveryTicks) continue;
