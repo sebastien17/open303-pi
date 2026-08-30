@@ -331,7 +331,7 @@ franc (valeur min vs max) sur notes tenues. **Tous confirmés fonctionnels** :
 | CC20 | Attaque filtre, notes normales | Audible, mais **subtil** — normal, la plage Devil Fish 0,3–30 ms est très courte. Perceptible seulement en A/B rapproché. |
 | CC21 | Attaque filtre, notes accentuées | Idem CC20 (même plage), audible en A/B sur notes vél. ≥ 100. |
 | CC22 | Highpass pré-filtre | Très net : le grave disparaît franchement au max. |
-| CC23 | Highpass feedback | Net entre 0 et ~150 Hz, **puis plus rien entre 150 et 500 Hz** — la moitié haute de la plage est inutile (peu d'énergie restante dans la boucle à ces fréquences). Plage à resserrer éventuellement. |
+| CC23 | Highpass feedback | Un seul saut audible entre 0 Hz et le premier palier, puis plus rien — **quelle que soit la plage**. Explication trouvée depuis (cf § ci-dessous) : limite structurelle du DSP, pas un réglage à corriger. |
 | CC24 | Highpass post-filtre | Très net, comme CC22. |
 | CC25 | Sustain ampli | Très net : -60 dB = extinction percussive 303, 0 dB = note tenue. |
 | CC26 | Decay ampli | Très net : du clic (16 ms) à la note très longue (3000 ms). |
@@ -350,7 +350,16 @@ un redémarrage complet du Pi, le son est revenu normalement avec la config inch
 
 - Valider à l'oreille les 3 flags CLI (`--square-phase`/`--tanh-drive`/`--tanh-offset`), pas
   encore testés.
-- Envisager de resserrer la plage de CC23 (moitié haute inaudible, cf tableau ci-dessus).
+**CC23 : fausse piste élucidée (ne pas la refaire).** Constatant que seul le premier palier
+s'entendait, deux resserrages successifs ont été tentés (0-500 → 0-150 → 0-60 Hz) : aucun n'a
+rendu le knob progressif, et le second a divisé l'effet maximal par 8. En allant lire le DSP
+plutôt qu'en continuant à tâtonner : `feedbackHighpass` vit dans `TeeBeeFilter`, donc tourne au
+taux **sur-échantillonné ×4** (176,4 kHz), et `OnePoleFilter` calcule
+`x = exp(-2*pi*fc/sampleRate)` → la fraction réellement filtrée (`1-x`) vaut 0,05 % à 15 Hz,
+0,21 % à 60 Hz, 0,53 % à 150 Hz, 1,77 % à 500 Hz. L'effet est donc **intrinsèquement ténu et non
+progressif**, ce n'est pas un bug ni un mauvais mapping. Plage 0-500 Hz restaurée (maximum
+d'effet disponible), calculs consignés dans le commentaire de `applyMidiEvent()` et dans le
+README pour clore le sujet.
 - Valider une vraie connexion RTP-MIDI entrante depuis un pair réseau (iPad, DAW...) — le
   mécanisme fonctionne côté serveur (confirmé via le client Python de test) mais pas encore
   validé de bout en bout avec un vrai pair stable.
