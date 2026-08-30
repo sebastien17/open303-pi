@@ -372,7 +372,17 @@ touche jamais au binaire audio directement : elle reecrit
 `/etc/default/open303` et redemarre `open303.service` (via un script `sudo`
 scope a cette seule action).
 
-Quatre nouveaux flags CLI la rendent possible :
+La page affiche aussi un **vumetre du niveau de sortie** en direct (ligne
+`output level`), tres utile pour diagnostiquer un "pas de son" : si le niveau
+bouge alors qu'on n'entend rien, le probleme est en aval (carte son, cablage,
+volume materiel) ; s'il reste a zero pendant qu'on joue, c'est le moteur qui
+ne produit rien. Il repose sur `--meter-file` : le niveau est ecrit dans
+`/run/open303/level` (tmpfs = RAM) **depuis la boucle principale, jamais
+depuis le thread audio**, et la page relit ce fichier toutes les 500 ms. Ce
+detour par un fichier est deliberé : interroger `journalctl` deux fois par
+seconde volerait du CPU au thread temps reel sur un Pi 3B+.
+
+Six nouveaux flags CLI rendent tout ca possible :
 - `--audio-device SOUS-CHAINE` : force la sortie audio dont le nom contient
   cette sous-chaine (ex: `--audio-device USB`). Sans correspondance, repli
   sur la selection automatique (cf section 6) avec un avertissement.
@@ -382,6 +392,10 @@ Quatre nouveaux flags CLI la rendent possible :
   sous-chaine (ex: `--midi-port Digitakt`). Sans correspondance, repli sur la
   selection automatique (cf section 7ter) avec un avertissement.
 - `--list-midi-ports` : affiche les ports MIDI disponibles et quitte.
+- `--meter` : affiche le niveau crete de sortie sur la console toutes les
+  200 ms (diagnostic en ligne de commande).
+- `--meter-file CHEMIN` : ecrit ce meme niveau dans un fichier (prevu pour
+  `/run`, cf ci-dessus) au lieu de l'afficher. C'est ce qu'utilise le service.
 
 **Installation** (apres `systemd/install-service.sh`, sur le Pi) :
 ```bash

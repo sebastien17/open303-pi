@@ -401,11 +401,33 @@ montrent la bascule automatique dans les deux sens (`Midi Through` ↔ `rtpmidid
 sessions réseau qui apparaissent et meurent. C'est la première fois que le chemin Wi-Fi complet
 fonctionne : PC → RTP-MIDI → rtpmidid → ALSA → open303 → audio USB.
 
+## Vumètre de sortie (point 36 réexaminé)
+
+39. **Le diagnostic « dongle USB défaillant » ne résiste pas à l'examen.** Vérifications faites
+    sur le Pi : `vcgencmd get_throttled` = `0x0` (**aucune sous-tension**), autosuspend USB déjà
+    désactivé pour ce périphérique (`power/control=on`), **aucune erreur USB dans `dmesg`**. Et
+    surtout, un fait qu'on avait sous les yeux le contredisait déjà : `speaker-test` fonctionnait
+    à l'instant où open303 restait muet — un dongle en panne aurait fait échouer les deux.
+    (Les logs noyau de la fenêtre de panne elle-même sont perdus : le journal persistant ne
+    contient qu'un seul boot, postérieur à l'incident.)
+40. **Vumètre ajouté pour trancher objectivement.** `--meter` (console) et `--meter-file` (fichier)
+    publient le niveau crête de sortie. Permet de distinguer sans ambiguïté deux causes qui se
+    ressemblent de l'extérieur : *moteur muet alors que les notes arrivent* (problème de
+    paramètres/MIDI) vs *moteur qui produit du signal mais rien en sortie* (problème en aval).
+    Mesure de référence en état sain : **-6 dBFS** avec décroissance d'enveloppe propre.
+41. **Affiché en direct dans l'interface web** (ligne `output level`, barre ASCII).
+    **Contrainte explicite de l'utilisateur : ne pas nuire à la latence.** Respectée par
+    construction — le thread temps réel ne fait qu'un max de valeurs absolues + un CAS atomique ;
+    l'écriture fichier a lieu dans la boucle principale (déjà réveillée toutes les 200 ms), dans
+    `/run` (tmpfs = RAM, pas d'usure SD) ; la page relit ce fichier de 10 octets. **Le détour par
+    un fichier est délibéré** : lancer `journalctl` 2 fois/s pour la même information volerait du
+    CPU au thread audio sur un Pi 3B+. Vérifié après déploiement : **aucun xrun**.
+
 ## Reste à faire
 
 - Valider avec un **vrai pair réseau musical** (iPad, DAW...) plutôt que le client Python de test.
-- **Résoudre la fiabilité de l'adaptateur audio USB** (remplacer ou tester un autre modèle) —
-  suspecté défaillant par intermittence (point 36 ci-dessus).
+- **Reproduire et diagnostiquer la coupure audio intermittente** avec le vumètre (point 39
+  ci-dessous) — l'hypothèse « dongle défaillant » du point 36 est à reconsidérer.
 - **Diagnostiquer pourquoi le Digitakt n'envoie rien en USB MIDI vers Windows** (point 35),
   indépendamment de ce projet.
 
