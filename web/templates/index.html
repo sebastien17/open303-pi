@@ -106,6 +106,51 @@
     margin-top: 24px;
     font-size: 12px;
   }
+  /* Repliee par defaut : la page reste centree sur la config, la reference
+     CC n'apparait que si on la demande. */
+  .cc-box summary {
+    cursor: pointer;
+    color: var(--amber);
+    letter-spacing: 1px;
+    list-style: none;
+  }
+  .cc-box summary::-webkit-details-marker { display: none; }
+  .cc-box[open] summary { margin-bottom: 14px; }
+  table.cc {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  table.cc th {
+    text-align: left;
+    color: var(--fg-bright);
+    border-bottom: 1px solid var(--fg-dim);
+    padding: 4px 6px;
+  }
+  table.cc td {
+    padding: 3px 6px;
+    border-bottom: 1px dotted rgba(31, 153, 68, 0.4);
+  }
+  table.cc td:first-child {
+    color: var(--fg-bright);
+    text-align: right;
+    width: 3em;
+  }
+  table.cc tr.grp td {
+    color: var(--amber);
+    padding-top: 12px;
+    border-bottom: 1px solid var(--fg-dim);
+    letter-spacing: 1px;
+  }
+  table.cc .note { color: var(--fg-dim); }
+  .cc-notes {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--fg-dim);
+    line-height: 1.5;
+  }
+  .cc-notes b { color: var(--fg); }
+  .cc-notes p { margin: 8px 0 0; }
   .qr-footer {
     display: block;
     width: 100px;
@@ -153,6 +198,48 @@
 
       <button type="submit">&gt; APPLY &amp; RESTART</button>
     </form>
+
+    <details class="box cc-box" data-title="MIDI CC REFERENCE">
+      <summary>&gt; show the CC map (what to assign on your controller)</summary>
+
+      <table class="cc">
+        <tr><th>CC</th><th>parameter</th><th>range</th></tr>
+        <tr class="grp"><td colspan="3">classic 303 controls</td></tr>
+        <tr><td>74</td><td>filter cutoff</td><td>313.8 - 2394.4 Hz</td></tr>
+        <tr><td>71</td><td>resonance</td><td>0 - 100 %</td></tr>
+        <tr><td>1</td><td>env mod (mod wheel)</td><td>0 - 100 %</td></tr>
+        <tr><td>73</td><td>filter envelope decay</td><td>200 - 2000 ms</td></tr>
+        <tr><td>28</td><td>tuning (A4)</td><td>415 - 466 Hz</td></tr>
+        <tr><td>29</td><td>accent amount</td><td>0 - 100 %</td></tr>
+        <tr><td>70</td><td>waveform</td><td>saw &rarr; square</td></tr>
+        <tr><td>7</td><td>volume</td><td>-40 - 0 dB</td></tr>
+        <tr><td>5</td><td>slide time (portamento)</td><td>5 - 500 ms</td></tr>
+
+        <tr class="grp"><td colspan="3">extended ("back panel")</td></tr>
+        <tr><td>20</td><td>filter attack, normal notes</td><td>0.3 - 30 ms</td></tr>
+        <tr><td>21</td><td>filter attack, accented notes</td><td>0.3 - 30 ms</td></tr>
+        <tr><td>22</td><td>highpass before filter</td><td>0 - 500 Hz</td></tr>
+        <tr><td>23</td><td>highpass in feedback loop</td><td>0 - 500 Hz <span class="note">(subtle)</span></td></tr>
+        <tr><td>24</td><td>highpass after filter</td><td>0 - 500 Hz</td></tr>
+        <tr><td>25</td><td>amp sustain</td><td>-60 - 0 dB</td></tr>
+        <tr><td>26</td><td>amp decay</td><td>16 - 3000 ms</td></tr>
+        <tr><td>27</td><td>amp release</td><td>1 - 500 ms</td></tr>
+
+        <tr class="grp"><td colspan="3">standard MIDI</td></tr>
+        <tr><td>123</td><td>all notes off (panic)</td><td>&mdash;</td></tr>
+      </table>
+
+      <div class="cc-notes">
+        <p><b>no CC needed:</b> <b>accent</b> fires on velocity &ge; 100, and
+        <b>slide</b> on legato (overlapping notes) &mdash; both handled inside the
+        engine. Pitch bend is a message of its own, not a CC (&plusmn;2 semitones).</p>
+        <p><b>gotchas:</b> CC25 at 0 is -60 dB sustain, i.e. the original 303's
+        percussive envelope &mdash; setting the whole extended block to 0 makes the
+        synth nearly silent. CC73 has no effect on accented notes (their decay is
+        fixed at 200 ms). CC23 stays subtle by design: it runs at the x4
+        oversampled rate, so it only ever filters a fraction of a percent.</p>
+      </div>
+    </details>
 
     <div class="footer">open303-pi web control // restarts open303.service on every apply</div>
     <img class="qr-footer" src="{{ url_for('qr_png') }}" alt="Access QR code">
