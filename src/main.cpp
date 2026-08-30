@@ -831,7 +831,13 @@ int main(int argc, char** argv) {
   std::string currentPortName = midiin.getPortName(portIndex);
   int currentPortIndex = portIndex;
   int pollTicks = 0;
-  constexpr int kPollEveryTicks = 10;  // 10 x 200 ms = ~2 s
+  // 2 x 200 ms = ~400 ms. Descendu depuis 2 s pour qu'une session reseau qui
+  // vient de s'ouvrir soit prise en compte quasi immediatement (les outils de
+  // test n'ont plus besoin d'attendre plusieurs secondes avant d'emettre).
+  // Cout mesure sur le Pi 3B+ : indiscernable du bruit de fond (l'enumeration
+  // ALSA est une poignee d'ioctl, et elle a lieu dans la boucle principale,
+  // jamais dans le thread audio).
+  constexpr int kPollEveryTicks = 2;
 
   unsigned lastDropped = 0;
   while (gKeepRunning) {

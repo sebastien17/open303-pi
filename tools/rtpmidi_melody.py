@@ -64,8 +64,13 @@ def main():
     except Exception:
         pass  # ack du port data souvent absent, sans consequence
 
-    print("Session ouverte -- attente 4 s (le Pi doit detecter le nouveau port)")
-    time.sleep(4)
+    # Cette attente ne peut pas etre supprimee : rtpmidid vient de creer un
+    # port ALSA tout neuf pour cette session, et l'hote ne s'y abonne qu'apres
+    # avoir resonde la topologie (toutes les 400 ms). Emettre immediatement
+    # ferait jouer les premieres notes dans le vide. 1,2 s laisse une marge
+    # confortable au-dessus de ces 400 ms.
+    print("Session ouverte -- attente 1,2 s (le Pi doit detecter le nouveau port)")
+    time.sleep(1.2)
 
     # Reglages : son 303 bien typé
     for cc_num, val in ((70, 0), (74, 45), (71, 105), (1, 100), (73, 70), (7, 110),

@@ -91,10 +91,16 @@ def main():
               f"server may have accepted it silently)")
     print("Session established (or assumed so).")
 
-    pause = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
+    # rtpmidid has just created a brand new ALSA port for this session, and the
+    # host only subscribes to it after its next topology poll (every 400 ms).
+    # Sending immediately would play the first notes into a port nobody is
+    # listening to yet, so a short wait is required -- 1.2 s leaves comfortable
+    # margin. Override it with the third argument when you need longer (e.g. to
+    # inspect --list-midi-ports while the session is up).
+    pause = float(sys.argv[3]) if len(sys.argv) > 3 else 1.2
     if pause > 0:
-        print(f"Session open -- pausing {pause:.0f}s before sending "
-              f"(check/point a consumer at this fresh port now)...")
+        print(f"Session open -- pausing {pause:.1f}s so the host can pick up "
+              f"the new port...")
         time.sleep(pause)
 
     seq = 0
