@@ -65,6 +65,19 @@ def send_midi(sock, seq, timestamp, midi_bytes):
     sock.sendto(header + cmd, (HOST, DATA_PORT))
 
 
+def bye(sock, port):
+    """Ferme proprement la session (commande AppleMIDI "BY").
+
+    Sans ca, rtpmidid conserve le port ALSA de la session morte et en cree un
+    nouveau au lancement suivant : les ports fantomes s'accumulent et l'hote
+    peut rester abonne a l'un d'eux (plus de son a la 2e execution)."""
+    packet = struct.pack(">HH I I", 0xFFFF, 0x4259, 2, TOKEN) + struct.pack(">I", SSRC)
+    try:
+        sock.sendto(packet, (HOST, port))
+    except OSError:
+        pass
+
+
 def main():
     print(f"Connecting to {HOST}:{CONTROL_PORT} (data port {DATA_PORT}) as '{SESSION_NAME.decode()}'")
     ctrl_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -88,15 +101,20 @@ def main():
     ts = 0
     note, vel = 48, 80  # C3, moderate velocity
 
-    print(f"Sending Note On  note={note} vel={vel}")
-    send_midi(data_sock, seq, ts, bytes([0x90, note, vel]))
-    seq += 1
-    ts += 1000
-    time.sleep(2.0)
+    try:
+        print(f"Sending Note On  note={note} vel={vel}")
+        send_midi(data_sock, seq, ts, bytes([0x90, note, vel]))
+        seq += 1
+        ts += 1000
+        time.sleep(2.0)
 
-    print(f"Sending Note Off note={note}")
-    send_midi(data_sock, seq, ts, bytes([0x80, note, 0]))
-    print("Done.")
+        print(f"Sending Note Off note={note}")
+        send_midi(data_sock, seq, ts, bytes([0x80, note, 0]))
+    finally:
+        # Meme en cas d'interruption : pas de port ALSA fantome laisse derriere.
+        bye(data_sock, DATA_PORT)
+        bye(ctrl_sock, CONTROL_PORT)
+    print("Done (session closed cleanly).")
 
 
 if __name__ == "__main__":

@@ -497,14 +497,38 @@ int pickMidiPort(RtMidiIn& midiin, const std::string& preferredSubstring = "", b
   // sources MIDI fonctionnelles a ne pas ignorer (bug constate en pratique :
   // un pair reseau reellement connecte, visible dans les logs rtpmidid,
   // restait invisible a la selection automatique).
+  //
+  // Parmi les candidats restants on distingue deux familles, car elles ne se
+  // choisissent pas de la meme facon :
+  //
+  //  - un vrai peripherique materiel (ex: "Elektron Digitakt II") : on prend
+  //    le PREMIER, et il reste prioritaire sur le reseau ;
+  //  - un pair reseau rtpmidid (ex: "rtpmidid:PyMIDI") : on prend le DERNIER.
+  //    rtpmidid cree un nouveau port ALSA a chaque session SANS supprimer
+  //    ceux des sessions terminees ; les numeros de port ALSA etant
+  //    croissants, le dernier de la liste est donc le plus recent, seul
+  //    susceptible d'etre vivant. Prendre le premier revenait a s'abonner a
+  //    un port mort -- bug constate en pratique : relancer deux fois de suite
+  //    un script de test faisait disparaitre le son a la 2e execution, la
+  //    session #2 emettant sur un nouveau port pendant qu'on ecoutait encore
+  //    celui de la session #1.
+  int hardwareMatch    = -1;  // premier materiel reel
+  int newestNetworkPeer = -1;  // dernier pair rtpmidid vu
   for (unsigned int i = 0; i < nPorts; ++i) {
     const std::string name = midiin.getPortName(i);
-    if (name.find("Midi Through") == std::string::npos &&
-        name.find("Network Export") == std::string::npos &&
-        name.find("Announcements") == std::string::npos) {
-      return static_cast<int>(i);
+    if (name.find("Midi Through") != std::string::npos ||
+        name.find("Network Export") != std::string::npos ||
+        name.find("Announcements") != std::string::npos) {
+      continue;
+    }
+    if (name.find("rtpmidid") != std::string::npos) {
+      newestNetworkPeer = static_cast<int>(i);
+    } else if (hardwareMatch < 0) {
+      hardwareMatch = static_cast<int>(i);
     }
   }
+  if (hardwareMatch >= 0) return hardwareMatch;
+  if (newestNetworkPeer >= 0) return newestNetworkPeer;
   // Rien d'autre que "Midi Through"/rtpmidid : on s'y connecte quand meme
   // (position du premier port "Midi Through" trouve), au cas ou un logiciel
   // MIDI local ou une session reseau y enverrait des evenements via ALSA.
