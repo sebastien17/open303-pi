@@ -346,20 +346,42 @@ défauts moteur, utiliser plutôt : CC20/21≈10, CC22≈11, CC23≈38, CC24≈6
 Confirme aussi (point 36) que le silence audio est bien **intermittent et lié au matériel** : après
 un redémarrage complet du Pi, le son est revenu normalement avec la config inchangée.
 
+## CC23 : fausse piste élucidée (ne pas la refaire)
+
+Constatant que seul le premier palier s'entendait, deux resserrages successifs ont été tentés
+(0-500 → 0-150 → 0-60 Hz) : aucun n'a rendu le knob progressif, et le second a divisé l'effet
+maximal par 8. En allant lire le DSP plutôt qu'en continuant à tâtonner : `feedbackHighpass` vit
+dans `TeeBeeFilter`, donc tourne au taux **sur-échantillonné ×4** (176,4 kHz), et `OnePoleFilter`
+calcule `x = exp(-2*pi*fc/sampleRate)` → la fraction réellement filtrée (`1-x`) vaut 0,05 % à
+15 Hz, 0,21 % à 60 Hz, 0,53 % à 150 Hz, 1,77 % à 500 Hz. L'effet est donc **intrinsèquement ténu
+et non progressif**, ce n'est pas un bug ni un mauvais mapping. Plage 0-500 Hz restaurée (maximum
+d'effet disponible), calculs consignés dans le commentaire de `applyMidiEvent()` et dans le README
+pour clore le sujet.
+
+## Flags CLI `--square-phase` / `--tanh-drive` / `--tanh-offset` validés
+
+Testés en relançant le binaire à la main (service arrêté) avec des valeurs contrastées, mêmes
+notes à chaque manche. **Les trois sont bien câblés et fonctionnels**, mais tous produisent des
+effets discrets — cohérent avec leur nature : ce sont des paramètres de calibration interne, le
+code amont qualifie lui-même les deux `tanh` de *« internal parameter, to be scrapped eventually »*.
+
+- **`--square-phase`** (défaut 180°) : aucun effet en carré pur — normal, le header amont précise
+  *« this is important when the two are mixed »*. Testé correctement à **CC70=64** (mélange
+  saw+carré 50/50), la différence s'entend : surtout un changement de **niveau perçu**, par
+  interférence constructive/destructive entre les deux ondes selon leur phase relative.
+- **`--tanh-drive`** (défaut 36,9 dB) : différence de volume entre 12 / 36,9 / 60 dB, mais pas de
+  timbre. Explication calculée : `tanh(facteur·x + offset)` **sature totalement** dès ~25 dB
+  (facteur 70 à 36,9 dB → sortie ±1,0 partout). Le défaut est déjà dans la zone saturée, donc
+  monter plus haut ne change plus rien à la forme d'onde. À 12 dB la saturation est incomplète et
+  l'onde n'est plus vraiment un carré, d'où l'écart de niveau.
+- **`--tanh-offset`** (défaut 4,37) : décale le point de bascule → change le **rapport cyclique**.
+  Calculé : offset 0 → 50 %, 4,37 → 46,9 %, 8 → 44,3 %, 50 → 14,3 %. Sur la plage utile (0-8) la
+  variation est trop faible pour s'entendre ; à la valeur extrême 50 (impulsion fine) la
+  différence devient perceptible mais reste peu marquée — le filtre passe-bas et le
+  band-limiting du mip-mapping adoucissent la forme d'onde.
+
 ## Reste à faire
 
-- Valider à l'oreille les 3 flags CLI (`--square-phase`/`--tanh-drive`/`--tanh-offset`), pas
-  encore testés.
-**CC23 : fausse piste élucidée (ne pas la refaire).** Constatant que seul le premier palier
-s'entendait, deux resserrages successifs ont été tentés (0-500 → 0-150 → 0-60 Hz) : aucun n'a
-rendu le knob progressif, et le second a divisé l'effet maximal par 8. En allant lire le DSP
-plutôt qu'en continuant à tâtonner : `feedbackHighpass` vit dans `TeeBeeFilter`, donc tourne au
-taux **sur-échantillonné ×4** (176,4 kHz), et `OnePoleFilter` calcule
-`x = exp(-2*pi*fc/sampleRate)` → la fraction réellement filtrée (`1-x`) vaut 0,05 % à 15 Hz,
-0,21 % à 60 Hz, 0,53 % à 150 Hz, 1,77 % à 500 Hz. L'effet est donc **intrinsèquement ténu et non
-progressif**, ce n'est pas un bug ni un mauvais mapping. Plage 0-500 Hz restaurée (maximum
-d'effet disponible), calculs consignés dans le commentaire de `applyMidiEvent()` et dans le
-README pour clore le sujet.
 - Valider une vraie connexion RTP-MIDI entrante depuis un pair réseau (iPad, DAW...) — le
   mécanisme fonctionne côté serveur (confirmé via le client Python de test) mais pas encore
   validé de bout en bout avec un vrai pair stable.
