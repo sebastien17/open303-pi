@@ -423,6 +423,29 @@ fonctionne : PC → RTP-MIDI → rtpmidid → ALSA → open303 → audio USB.
     un fichier est délibéré** : lancer `journalctl` 2 fois/s pour la même information volerait du
     CPU au thread audio sur un Pi 3B+. Vérifié après déploiement : **aucun xrun**.
 
+## Ports rtpmidid fantômes : plus de son à la 2e exécution d'un script
+
+42. **Symptôme** : lancer deux fois d'affilée un script de test RTP-MIDI → aucun son la 2e fois.
+    **Cause double**, une de chaque côté :
+    - *Côté hôte* : rtpmidid crée un port ALSA par session et **ne supprime jamais** ceux des
+      sessions terminées. Plusieurs ports portent donc le même nom (`rtpmidid:PyMIDI` en 128:2,
+      128:3, 128:4...), et `pickMidiPort()` prenait le **premier** — c'est-à-dire le plus ancien,
+      donc mort — pendant que la nouvelle session émettait sur un port plus récent. Constaté
+      directement : 3 ports fantômes, abonnement sur 128:2.
+    - *Côté scripts* : ils ne fermaient jamais leur session, ce qui produisait ces fantômes.
+43. **Correctifs.** L'hôte choisit désormais le **dernier** port réseau (les numéros ALSA étant
+    croissants, seul le plus récent peut être vivant) tout en gardant la priorité au **premier**
+    périphérique matériel réel. Les deux scripts envoient la commande AppleMIDI `"BY"` dans un
+    bloc `finally` (donc même sur Ctrl+C), et rtpmidid libère le port aussitôt.
+    **Vérifié** : 16 notes sur 16 reçues sur deux exécutions consécutives, zéro port résiduel, et
+    le port réutilise le même numéro au lieu de s'empiler.
+44. **Sondage de topologie accéléré : 2 s → 400 ms**, ce qui ramène l'attente des scripts de 4 s à
+    1,2 s. Coût **mesuré** avant/après sur le Pi 3B+ plutôt que supposé : CPU au repos 3,15 % →
+    3,25 % (dans le bruit de mesure), aucun xrun — l'énumération ALSA est une poignée d'ioctl, et
+    elle a lieu dans la boucle principale, jamais dans le thread audio. L'attente ne peut pas
+    tomber à zéro : le port ALSA n'existe qu'à l'ouverture de session, émettre avant le prochain
+    sondage jouerait les premières notes dans le vide.
+
 ## Reste à faire
 
 - Valider avec un **vrai pair réseau musical** (iPad, DAW...) plutôt que le client Python de test.
