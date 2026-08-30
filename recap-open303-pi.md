@@ -321,10 +321,36 @@ identifiée (non corrigée, cf ci-dessous), et le vrai blocage final situé hors
     adaptateur USB audio, ou en repli sur la sortie jack embarquée pour confirmer que le problème
     n'est pas propre à l'USB audio sur ce Pi en général.
 
+## CC20-29 validés à l'oreille (session suivante, après reboot du Pi)
+
+Tous testés via `aseqsend` sur `Midi Through` (méthode fiable, cf point 32), chacun en A/B
+franc (valeur min vs max) sur notes tenues. **Tous confirmés fonctionnels** :
+
+| CC | Paramètre | Ressenti |
+|---|---|---|
+| CC20 | Attaque filtre, notes normales | Audible, mais **subtil** — normal, la plage Devil Fish 0,3–30 ms est très courte. Perceptible seulement en A/B rapproché. |
+| CC21 | Attaque filtre, notes accentuées | Idem CC20 (même plage), audible en A/B sur notes vél. ≥ 100. |
+| CC22 | Highpass pré-filtre | Très net : le grave disparaît franchement au max. |
+| CC23 | Highpass feedback | Net entre 0 et ~150 Hz, **puis plus rien entre 150 et 500 Hz** — la moitié haute de la plage est inutile (peu d'énergie restante dans la boucle à ces fréquences). Plage à resserrer éventuellement. |
+| CC24 | Highpass post-filtre | Très net, comme CC22. |
+| CC25 | Sustain ampli | Très net : -60 dB = extinction percussive 303, 0 dB = note tenue. |
+| CC26 | Decay ampli | Très net : du clic (16 ms) à la note très longue (3000 ms). |
+| CC27 | Release ampli | Très net : coupe sèche vs queue qui traîne après le note-off. |
+| CC28 | Tuning | Net : progression de hauteur 415 → 440 → 466 Hz sur la même note. |
+| CC29 | Intensité accent | Net sur notes accentuées : plus agressif/ouvert à 100 %. |
+
+**Piège rencontré pendant les tests** : mettre « tout à 0 » pour réinitialiser rend le synthé
+quasi muet — CC25 à 0 = sustain -60 dB, CC26/27 à 0 = enveloppes très courtes. Pour revenir aux
+défauts moteur, utiliser plutôt : CC20/21≈10, CC22≈11, CC23≈38, CC24≈6, CC25=0, CC26≈52, CC27=0.
+
+Confirme aussi (point 36) que le silence audio est bien **intermittent et lié au matériel** : après
+un redémarrage complet du Pi, le son est revenu normalement avec la config inchangée.
+
 ## Reste à faire
 
-- Valider à l'oreille les CC20-29 et les 3 flags CLI (`--square-phase`/`--tanh-drive`/
-  `--tanh-offset`), pas encore testés.
+- Valider à l'oreille les 3 flags CLI (`--square-phase`/`--tanh-drive`/`--tanh-offset`), pas
+  encore testés.
+- Envisager de resserrer la plage de CC23 (moitié haute inaudible, cf tableau ci-dessus).
 - Valider une vraie connexion RTP-MIDI entrante depuis un pair réseau (iPad, DAW...) — le
   mécanisme fonctionne côté serveur (confirmé via le client Python de test) mais pas encore
   validé de bout en bout avec un vrai pair stable.
