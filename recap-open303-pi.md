@@ -446,13 +446,33 @@ fonctionne : PC → RTP-MIDI → rtpmidid → ALSA → open303 → audio USB.
     tomber à zéro : le port ALSA n'existe qu'à l'ouverture de session, émettre avant le prochain
     sondage jouerait les premières notes dans le vide.
 
+## ✅ Digitakt II → PC → Wi-Fi → Pi : chaîne complète fonctionnelle
+
+45. **Le point 35 est résolu — et le diagnostic d'alors était faux.** On avait conclu « le
+    Digitakt n'envoie rien vers Windows » sur la foi de MIDI-OX qui ne montrait aucun événement.
+    En réalité le blocage était **dans rtpMIDI côté PC**, pas dans le Digitakt :
+    - la session `My Sessions` était **décochée**, et `Enabled` aussi — donc inactive, sans le
+      moindre message d'erreur ;
+    - `Who may connect to me` était sur **`Noone`**, refusant toute connexion entrante ;
+    - le `Directory` était vide (le Pi jamais découvert en Bonjour).
+
+    Le `Live routings` (entrée → session) pointait quant à lui **déjà** sur `Elektron Digitakt II`
+    depuis le début : ce n'était pas là le problème.
+46. **Correction** : session cochée + `Enabled`, `Who may connect to me` = `Anyone`, et ajout
+    manuel du Pi dans le `Directory` par **IP** (`192.168.1.64:5004`) — la découverte Bonjour
+    automatique s'était montrée capricieuse toute la session, l'ajout manuel est nettement plus
+    fiable. L'hôte s'est ensuite abonné tout seul au port `rtpmidid:NimH-PC` (ré-souscription
+    dynamique du point 37). **Son confirmé à l'oreille.**
+
+    Procédure complète consignée dans le README (§ 7ter), avec le rappel que ce détour par le PC
+    est facultatif : le Digitakt peut se brancher **directement en USB sur le Pi**, cas d'usage
+    d'origine du projet.
+
 ## Reste à faire
 
 - Valider avec un **vrai pair réseau musical** (iPad, DAW...) plutôt que le client Python de test.
-- **Reproduire et diagnostiquer la coupure audio intermittente** avec le vumètre (point 39
-  ci-dessous) — l'hypothèse « dongle défaillant » du point 36 est à reconsidérer.
-- **Diagnostiquer pourquoi le Digitakt n'envoie rien en USB MIDI vers Windows** (point 35),
-  indépendamment de ce projet.
+- **Reproduire et diagnostiquer la coupure audio intermittente** avec le vumètre (point 40) —
+  l'hypothèse « dongle défaillant » du point 36 est à reconsidérer.
 
 ## À valider à l'oreille sur le Pi
 

@@ -363,6 +363,47 @@ pour forcer un controleur USB precis par nom (ex: `--midi-port Digitakt`)
 ou laissez la selection automatique par defaut, qui gere deja correctement
 le choix entre USB et `Midi Through` (donc le reseau).
 
+**Ports fantomes** : rtpmidid cree un port ALSA par session et **ne supprime
+pas** ceux des sessions terminees. Plusieurs ports peuvent donc porter le meme
+nom. La selection automatique prend volontairement le **dernier** port reseau
+(les numeros ALSA etant croissants, seul le plus recent peut etre vivant) tout
+en gardant la priorite au **premier** peripherique materiel reel. Cote client,
+fermez toujours la session proprement (commande AppleMIDI `BY`, ce que font les
+scripts de `tools/`) ; sinon, `sudo systemctl restart rtpmidid.service` purge
+les fantomes.
+
+### Envoyer le MIDI d'un appareil USB via un PC Windows (rtpMIDI)
+
+Utile si l'appareil (ex: Elektron Digitakt) doit rester branche au PC/DAW.
+Avec [rtpMIDI de Tobias Erichsen](https://www.tobias-erichsen.de/software/rtpmidi.html),
+dans l'onglet `Setup` :
+
+1. **Creez une session** dans `My Sessions` (bouton `+`) et **cochez-la**, puis
+   cochez `Enabled` dans le cadre `Session` a droite. Une session decochee
+   n'emet rien — c'est silencieux et sans message d'erreur.
+2. **`Who may connect to me`** : mettez `Anyone` (ou `Only computers in my
+   directory` si vous ajoutez le Pi a l'etape suivante). Sur `Noone`, toute
+   connexion entrante est refusee.
+3. **Ajoutez le Pi** dans `Directory` (bouton `+`) : nom libre, `Hostname /
+   IP-Address` = l'IP du Pi, `Port` = 5004. La decouverte Bonjour automatique
+   fonctionne parfois, mais l'ajout manuel par IP est nettement plus fiable.
+   Selectionnez-le puis `Connect` — il doit apparaitre dans `Participants`.
+4. **`Live routings`** : dans le menu **du haut** (fleche vers la droite,
+   entree → session), choisissez votre appareil MIDI (ex: `Elektron Digitakt
+   II`). C'est ce qui aiguille son MIDI vers le reseau.
+
+> **Le detour par le PC n'est pas obligatoire.** Un Digitakt (ou tout
+> controleur USB class-compliant) peut se brancher **directement sur le Pi** :
+> c'est le cas d'usage d'origine du projet, deja gere par le service et la
+> regle udev, et la selection automatique donne la priorite au materiel reel
+> sur le reseau. Passez par le PC seulement si l'appareil doit rester relie a
+> votre DAW.
+
+**Diagnostic** : si rien n'arrive, verifiez d'abord que l'appareil emet bien
+vers Windows (MIDI-OX ou tout moniteur MIDI) avant de suspecter le reseau ou
+le Pi. Cote Pi, `journalctl -u open303.service -f` affiche chaque evenement
+recu (`[midi] Note On ...`).
+
 ## 8. Interface web de pilotage (optionnel)
 
 Petite page web pour changer le canal MIDI ecoute, le port MIDI d'entree
