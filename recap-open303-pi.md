@@ -380,15 +380,32 @@ code amont qualifie lui-même les deux `tanh` de *« internal parameter, to be s
   différence devient perceptible mais reste peu marquée — le filtre passe-bas et le
   band-limiting du mip-mapping adoucissent la forme d'onde.
 
+## ✅ MIDI Wi-Fi fonctionnel de bout en bout (point 33 corrigé)
+
+37. **Ré-souscription MIDI dynamique implémentée.** La boucle principale (déjà réveillée toutes
+    les 200 ms pour le rapport d'événements perdus) resonde désormais la liste des ports ALSA
+    toutes les ~2 s, en mode silencieux, et se rebranche dès que le port retenu change. Corrige
+    la limite structurelle du point 33 : rtpmidid crée un nouveau port à chaque connexion réseau
+    et l'abonnement pris au démarrage devenait orphelin en silence (plus aucune note, aucune
+    erreur, redémarrage manuel obligatoire). Gère aussi, au passage, le **hot-plug d'un
+    contrôleur USB**, qui ne reposait jusqu'ici que sur la règle udev redémarrant tout le service.
+38. **CC 123 (All Notes Off) ajouté**, poussé dans la file pendant la bascule — à cet instant le
+    thread de callback RtMidi est arrêté par `closePort()`, donc un seul producteur : hypothèse
+    SPSC préservée. Sans ça, une note tenue au moment où la session tombe ne reçoit jamais son
+    note-off et le moteur tourne indéfiniment (c'était l'origine du CPU anormalement élevé au
+    repos observé pendant le débogage).
+
+**Validé de bout en bout** avec `tools/rtpmidi_melody.py` (client AppleMIDI Python) : séquence de
+8 notes avec accents envoyée depuis le PC en Wi-Fi → reçue et **entendue** sur le Pi. Les logs
+montrent la bascule automatique dans les deux sens (`Midi Through` ↔ `rtpmidid:PyMIDI`) au fil des
+sessions réseau qui apparaissent et meurent. C'est la première fois que le chemin Wi-Fi complet
+fonctionne : PC → RTP-MIDI → rtpmidid → ALSA → open303 → audio USB.
+
 ## Reste à faire
 
-- Valider une vraie connexion RTP-MIDI entrante depuis un pair réseau (iPad, DAW...) — le
-  mécanisme fonctionne côté serveur (confirmé via le client Python de test) mais pas encore
-  validé de bout en bout avec un vrai pair stable.
+- Valider avec un **vrai pair réseau musical** (iPad, DAW...) plutôt que le client Python de test.
 - **Résoudre la fiabilité de l'adaptateur audio USB** (remplacer ou tester un autre modèle) —
   suspecté défaillant par intermittence (point 36 ci-dessus).
-- **Corriger la ré-souscription MIDI dynamique** pour rtpmidid (point 33) : suivre les
-  changements de topologie ALSA au lieu de choisir un port une seule fois au démarrage.
 - **Diagnostiquer pourquoi le Digitakt n'envoie rien en USB MIDI vers Windows** (point 35),
   indépendamment de ce projet.
 
