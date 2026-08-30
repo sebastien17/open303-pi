@@ -13,7 +13,13 @@ Group=audio
 SupplementaryGroups=audio
 
 EnvironmentFile=-/etc/default/open303
-ExecStart=/usr/local/bin/open303_pi_host ${SAMPLE_RATE} ${BUFFER_FRAMES} $EXTRA_ARGS
+# --meter-file est place ICI et non dans EXTRA_ARGS : l'interface web
+# reconstruit entierement EXTRA_ARGS a partir de son formulaire, donc tout ce
+# qu'on y met a la main disparait au premier "Apply" (regression constatee :
+# le vumetre de la page s'eteignait des qu'on changeait un reglage).
+# EXTRA_ARGS = reglages utilisateur ; ExecStart = plomberie du service.
+ExecStart=/usr/local/bin/open303_pi_host ${SAMPLE_RATE} ${BUFFER_FRAMES} \
+    --meter-file /run/open303/level $EXTRA_ARGS
 
 # Cree /run/open303 (tmpfs, donc en RAM) appartenant a l'utilisateur du
 # service, et le supprime a l'arret. Sert de destination a --meter-file :

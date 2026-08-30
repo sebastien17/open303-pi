@@ -71,6 +71,7 @@
   }
   .row:last-child { border-bottom: none; }
   .row .val { color: var(--fg-bright); }
+  .row .hint { color: var(--fg-dim); }
   label {
     display: block;
     margin: 14px 0 4px;
@@ -165,7 +166,7 @@
     <div class="subtitle">:: CONTROL PANEL ::</div>
 
     <div class="box" data-title="STATUS">
-      <div class="row"><span>midi channel</span><span class="val">{{ "ALL" if channel is none else channel }}</span></div>
+      <div class="row"><span>midi channel</span><span class="val">{{ "ALL" if channel is none else channel + 1 }}{% if detected %} <span class="hint">(seen: {{ detected|join(', ') }})</span>{% endif %}</span></div>
       <div class="row"><span>midi port</span><span class="val">{{ midi_status }}</span></div>
       <div class="row"><span>audio output</span><span class="val">{{ audio_status }}</span></div>
       <div class="row"><span>output level</span><span class="val" id="meter">----------------  --</span></div>
@@ -173,10 +174,14 @@
 
     <form class="box" data-title="CONFIGURATION" method="post" action="{{ url_for('apply') }}">
       <label for="channel">midi channel to listen on</label>
+      {# La valeur envoyee reste 0-15 (ce qu'attend --channel), mais l'etiquette
+         affiche 1-16 comme sur tous les appareils MIDI : afficher "channel 0"
+         face a un materiel qui annonce "channel 1" invitait a se tromper d'un
+         rang. #}
       <select name="channel" id="channel">
         <option value="all" {{ "selected" if channel is none }}>all channels</option>
         {% for n in range(16) %}
-        <option value="{{ n }}" {{ "selected" if channel == n }}>channel {{ n }}</option>
+        <option value="{{ n }}" {{ "selected" if channel == n }}>channel {{ n + 1 }}</option>
         {% endfor %}
       </select>
 

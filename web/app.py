@@ -81,6 +81,29 @@ def list_audio_devices():
     return devices
 
 
+def detected_channels():
+    """Canaux MIDI sur lesquels des notes sont reellement arrivees recemment,
+    numerotes 1-16 comme sur le materiel.
+
+    Evite le tatonnement le plus courant : on ne sait pas forcement sur quel
+    canal emet son sequenceur, et un filtre --channel mal choisi donne un
+    silence total sans le moindre indice. Lu depuis les logs (une seule fois
+    par affichage de page, pas en boucle)."""
+    try:
+        out = subprocess.run(
+            ["journalctl", "-u", "open303.service", "-n", "400", "--no-pager"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    found = set()
+    for line in out.splitlines():
+        m = re.search(r"Note On\s+ch=(\d+)", line)
+        if m:
+            found.add(int(m.group(1)) + 1)  # 0-15 en interne -> 1-16 affiche
+    return sorted(found)
+
+
 def current_midi_port():
     """Dernier port MIDI reellement ouvert par open303.service, lu dans ses
     logs (ligne "MIDI ouvert sur: ..."). Contrairement a l'audio, RtMidi ne
@@ -192,6 +215,7 @@ def index():
         midi_port=midi_port,
         midi_status=format_status(midi_port_label(midi_port), midi_port_label(current_midi_port())),
         midi_ports=list_midi_ports(),
+        detected=detected_channels(),
     )
 
 
