@@ -225,7 +225,7 @@ Pi 4/5. Quelques ajustements par rapport au reste du guide :
 | CC20                 | Attaque enveloppe filtre, notes non accentuees (0.3-30 ms) |
 | CC21                 | Attaque enveloppe filtre, notes accentuees (0.3-30 ms) |
 | CC22                 | Highpass avant le filtre principal (0-500 Hz) |
-| CC23                 | Highpass dans la boucle de feedback du filtre (0-60 Hz ; au-dela l'effet est inaudible) |
+| CC23                 | Highpass dans la boucle de feedback du filtre (0-500 Hz ; effet volontairement tenu, cf note ci-dessous) |
 | CC24                 | Highpass apres le filtre principal (0-500 Hz) |
 | CC25                 | Sustain de l'enveloppe d'amplitude (-60-0 dB) |
 | CC26                 | Decay de l'enveloppe d'amplitude (16-3000 ms) |
@@ -248,6 +248,17 @@ Pi 4/5. Quelques ajustements par rapport au reste du guide :
 **CC20-27 choisis dans la plage "undefined" du spec MIDI 1.0** (aucune
 collision avec un usage standard), cf commentaires dans `applyMidiEvent()`
 (`src/main.cpp`) pour le detail de chaque plage.
+
+> **CC23 (highpass de feedback) : effet intrinsequement tenu.** Ce filtre
+> tourne a l'interieur de `TeeBeeFilter`, donc au taux **sur-echantillonne
+> x4** (176,4 kHz pour une sortie a 44,1 kHz). Comme `OnePoleFilter` calcule
+> `x = exp(-2*pi*fc/sampleRate)`, la part du signal reellement filtree
+> (~`1-x`) reste minuscule : 0,05 % a 15 Hz, 0,21 % a 60 Hz, 0,53 % a 150 Hz,
+> 1,77 % a 500 Hz. A l'oreille on ne distingue donc qu'un saut entre 0 Hz
+> (filtre inactif) et le premier palier, sans progression ensuite.
+> **Ne pas "corriger" ca en resserrant la plage** : essaye en 0-150 puis
+> 0-60 Hz, ca divise l'effet maximal par 3 puis par 8 sans rien gagner en
+> progressivite. La plage large 0-500 Hz est conservee volontairement.
 
 `setSquarePhaseShift`, `setTanhShaperDrive` et `setTanhShaperOffset` sont
 **volontairement absents de tout mapping CC** : ils regenerent la wavetable

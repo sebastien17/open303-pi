@@ -175,16 +175,26 @@ void applyMidiEvent(const MidiEvent& ev) {
           gSynth.setPreFilterHighpass(500.0 * v01);
           break;
         case 23:  // Highpass dans la boucle de feedback du filtre (Hz).
-                  // Plage 0-60 Hz, resserree en deux temps apres tests a
-                  // l'oreille (note grave, forte resonance) : d'abord depuis
-                  // 0-500 Hz vers 0-150 Hz, puis vers 0-60 Hz -- l'effet
-                  // cesse d'etre perceptible des ~40 Hz (il ne reste presque
-                  // plus d'energie a retirer dans la boucle de feedback
-                  // au-dela). Consequence assumee : le defaut moteur
-                  // (150 Hz) n'est plus atteignable par CC, mais il est de
-                  // toute facon inaudible -- on prefere un knob entierement
-                  // utile sur toute sa course.
-          gSynth.setFeedbackHighpass(60.0 * v01);
+                  // Defaut moteur : 150 Hz. Plage large (0-500 Hz) VOULUE,
+                  // malgre un knob peu progressif a l'oreille.
+                  //
+                  // Ce filtre tourne dans TeeBeeFilter, donc au taux
+                  // SUR-ECHANTILLONNE x4 (176.4 kHz a 44.1 kHz de sortie).
+                  // Or OnePoleFilter calcule x = exp(-2*pi*fc/sampleRate),
+                  // et la part du signal reellement filtree vaut ~(1-x) :
+                  //    15 Hz -> 0.05 %,  60 Hz -> 0.21 %,
+                  //   150 Hz -> 0.53 %, 500 Hz -> 1.77 %
+                  // Autrement dit, meme en butee l'effet reste tenu, et il
+                  // est concentre dans les tout premiers Hz (passage
+                  // "filtre inactif -> actif"). Des tests a l'oreille ont
+                  // confirme qu'on n'entend une difference qu'entre 0 et le
+                  // premier palier, quelle que soit la plage.
+                  //
+                  // Resserrer la plage est donc CONTRE-PRODUCTIF (essaye :
+                  // 0-150 puis 0-60 Hz -> effet maximal divise par 3 puis
+                  // par 8, sans gagner en progressivite). On garde 0-500 Hz,
+                  // qui offre le maximum d'effet disponible.
+          gSynth.setFeedbackHighpass(500.0 * v01);
           break;
         case 24:  // Highpass apres le filtre principal (Hz). Defaut moteur :
                   // ~24.2 Hz.
