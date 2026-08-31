@@ -36,6 +36,27 @@ DEVICE_NAME_RE = re.compile(r"^[A-Za-z0-9 _\-().:]{0,100}$")
 app = Flask(__name__)
 
 
+def journal_grep(pattern, lines=20):
+    """Lignes du journal d'open303.service contenant `pattern`, filtrees par
+    journalctl lui-meme (--grep) et non apres coup.
+
+    Important : lire "les N dernieres lignes" puis filtrer en Python ne marche
+    pas de facon fiable ici. Les avertissements ALSA (sondage de vc4hdmi...)
+    et les evenements MIDI noient vite le journal, et l'information cherchee
+    -- ecrite une seule fois au demarrage -- sort de la fenetre. Bug constate :
+    la ligne "Buffer=... latence ~..." etait deja hors des 200 dernieres
+    lignes quelques minutes apres le demarrage du service."""
+    try:
+        out = subprocess.run(
+            ["journalctl", "-u", "open303.service", "--grep", pattern,
+             "-n", str(lines), "--no-pager"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    return out.splitlines()
+
+
 def current_output_device():
     """Peripheriques de sortie deja ouverts en exclusif par open303.service
     (le device actif) n'apparaissent PAS dans `--list-devices` -- RtAudio ne
@@ -43,15 +64,8 @@ def current_output_device():
     pratique : la carte USB active disparait de l'enumeration tant que le
     service tourne. On retrouve donc le device reellement utilise via la
     derniere ligne "Sortie audio: ..." des logs, pour l'ajouter a la liste."""
-    try:
-        out = subprocess.run(
-            ["journalctl", "-u", "open303.service", "-n", "200", "--no-pager"],
-            capture_output=True, text=True, timeout=5,
-        ).stdout
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return ""
     match = None
-    for line in out.splitlines():
+    for line in journal_grep("Sortie audio:"):
         m = re.search(r"Sortie audio:\s*(.+)", line)
         if m:
             match = m.group(1).strip()
@@ -89,19 +103,37 @@ def detected_channels():
     canal emet son sequenceur, et un filtre --channel mal choisi donne un
     silence total sans le moindre indice. Lu depuis les logs (une seule fois
     par affichage de page, pas en boucle)."""
-    try:
-        out = subprocess.run(
-            ["journalctl", "-u", "open303.service", "-n", "400", "--no-pager"],
-            capture_output=True, text=True, timeout=5,
-        ).stdout
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return []
     found = set()
-    for line in out.splitlines():
+    for line in journal_grep("Note On", lines=200):
         m = re.search(r"Note On\s+ch=(\d+)", line)
         if m:
             found.add(int(m.group(1)) + 1)  # 0-15 en interne -> 1-16 affiche
     return sorted(found)
+
+
+def current_stream_info():
+    """Buffer / sample rate / latence du flux audio en cours, relus depuis la
+    ligne "Open303 pret. Buffer=N frames @ R Hz (latence ~X ms)" des logs.
+
+    C'est la latence NOMINALE du buffer (buffer / sample_rate), pas une mesure
+    aller-retour : elle ne compte ni le trajet MIDI en amont ni la conversion
+    du DAC en aval. Utile pour verifier l'effet d'un changement de
+    BUFFER_FRAMES, pas pour caracteriser la chaine complete.
+
+    Valeur relue plutot que recalculee cote Python : RtAudio ajuste parfois le
+    buffer demande a ce que le peripherique accepte reellement (256 devenu 444
+    sur la sortie embarquee, par exemple), donc seule la ligne du binaire dit
+    ce qui est effectivement en place."""
+    match = None
+    for line in journal_grep("Buffer="):
+        m = re.search(r"Buffer=(\d+) frames @ (\d+) Hz \(latence ~([\d.]+) ms\)", line)
+        if m:
+            match = {
+                "frames": int(m.group(1)),
+                "rate": int(m.group(2)),
+                "latency_ms": float(m.group(3)),
+            }
+    return match
 
 
 def current_midi_port():
@@ -110,15 +142,8 @@ def current_midi_port():
     bloque pas l'enumeration d'un port deja utilise par un autre processus
     (les sequenceurs ALSA supportent plusieurs abonnes) -- pas besoin de
     fusionner ce resultat dans list_midi_ports(), juste de l'afficher."""
-    try:
-        out = subprocess.run(
-            ["journalctl", "-u", "open303.service", "-n", "200", "--no-pager"],
-            capture_output=True, text=True, timeout=5,
-        ).stdout
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return ""
     match = None
-    for line in out.splitlines():
+    for line in journal_grep("MIDI ouvert sur:"):
         m = re.search(r"MIDI ouvert sur:\s*(.+)", line)
         if m:
             match = m.group(1).strip()
@@ -216,6 +241,7 @@ def index():
         midi_status=format_status(midi_port_label(midi_port), midi_port_label(current_midi_port())),
         midi_ports=list_midi_ports(),
         detected=detected_channels(),
+        stream=current_stream_info(),
     )
 
 

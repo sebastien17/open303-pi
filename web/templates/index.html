@@ -170,6 +170,12 @@
       <div class="row"><span>midi port</span><span class="val">{{ midi_status }}</span></div>
       <div class="row"><span>audio output</span><span class="val">{{ audio_status }}</span></div>
       <div class="row"><span>output level</span><span class="val" id="meter">----------------  --</span></div>
+      <div class="row"><span>buffer / latency</span><span class="val">
+        {%- if stream -%}
+          {{ stream.frames }} frames @ {{ stream.rate }} Hz &mdash; ~{{ "%.1f"|format(stream.latency_ms) }} ms
+          <span class="hint">(buffer only)</span>
+        {%- else -%}?{%- endif -%}
+      </span></div>
     </div>
 
     <form class="box" data-title="CONFIGURATION" method="post" action="{{ url_for('apply') }}">
