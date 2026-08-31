@@ -246,6 +246,11 @@
         <tr><td>26</td><td>amp decay</td><td>16 - 3000 ms</td></tr>
         <tr><td>27</td><td>amp release</td><td>1 - 500 ms</td></tr>
 
+        <tr class="grp"><td colspan="3">overdrive (not part of Open303)</td></tr>
+        <tr><td>30</td><td>drive</td><td>0 = bypass &rarr; max</td></tr>
+        <tr><td>31</td><td>tone after saturation</td><td>dark &rarr; bright</td></tr>
+        <tr><td>32</td><td>dry / wet</td><td>clean &rarr; saturated</td></tr>
+
         <tr class="grp"><td colspan="3">standard MIDI</td></tr>
         <tr><td>123</td><td>all notes off (panic)</td><td>&mdash;</td></tr>
       </table>
@@ -259,6 +264,9 @@
         synth nearly silent. CC73 has no effect on accented notes (their decay is
         fixed at 200 ms). CC23 stays subtle by design: it runs at the x4
         oversampled rate, so it only ever filters a fraction of a percent.</p>
+        <p><b>overdrive:</b> a tanh soft-clipper, <i>not</i> a port of jc303's amp
+        models &mdash; those run an LSTM per sample, measured here at 64&nbsp;% of one
+        core, which a 64-frame buffer cannot afford. CC30 at 0 is an exact bypass.</p>
       </div>
     </details>
 

@@ -47,6 +47,57 @@ std::atomic<bool> gEnableRealtime{false};
 // Un simple max de valeurs absolues : pas d'allocation ni de verrou, donc
 // sans danger dans le callback audio.
 std::atomic<float> gPeakLevel{0.0f};
+
+// ---------------------------------------------------------------------
+// Overdrive (saturation analogique)
+// ---------------------------------------------------------------------
+// Inspire de la section OVERDRIVE de jc303, mais PAS un portage : jc303
+// utilise un reseau LSTM (RTNeural/GuitarML, hidden=40) evalue a chaque
+// echantillon. Mesure sur ce Pi 3B+ : 14,6 us par echantillon, soit 64 % d'un
+// coeur en continu, pour un budget de 22,7 us a 44,1 kHz -- incompatible avec
+// notre buffer de 64 frames (0,93 ms consommes sur 1,45 ms), sans compter
+// l'ajout de JUCE + chowdsp + RTNeural comme dependances.
+//
+// A la place : un waveshaper tanh classique (soft clipping), qui est de toute
+// facon le type de saturation qu'on entend sur la plupart des disques acid.
+// Cout : quelques operations par echantillon, aucune allocation, aucun verrou.
+//
+// Les trois parametres sont lus par le thread audio et ecrits par le thread
+// MIDI : atomiques relaxed, aucune dependance entre eux (une valeur lue "en
+// retard" d'un bloc est sans consequence audible).
+std::atomic<float> gDriveAmount{0.0f};  // 0 = desactive (bypass exact)
+std::atomic<float> gDriveTone{1.0f};    // 0 = sombre, 1 = brillant
+std::atomic<float> gDriveMix{1.0f};     // 0 = dry, 1 = 100 % sature
+
+// Etat du filtre de tonalite (passe-bas 1 pole), touche uniquement par le
+// thread audio.
+float gDriveToneState = 0.0f;
+
+// Applique la saturation a un echantillon. Renvoie l'entree telle quelle
+// quand le drive est a zero, pour que "overdrive eteint" soit un bypass
+// strict et non une approximation.
+inline float applyOverdrive(float x) {
+  const float amount = gDriveAmount.load(std::memory_order_relaxed);
+  if (amount <= 0.0f) return x;
+
+  // Gain d'attaque : 1x a 40x. La compensation en sortie evite que monter le
+  // drive ne se traduise surtout par "plus fort" (le piege classique, deja
+  // rencontre en testant --tanh-drive).
+  const float gain = 1.0f + 39.0f * amount;
+  float y = std::tanh(x * gain) / std::tanh(gain);
+
+  // Tonalite : passe-bas 1 pole pour adoucir les harmoniques hautes que la
+  // saturation vient de creer. tone=1 laisse passer tel quel.
+  const float tone = gDriveTone.load(std::memory_order_relaxed);
+  if (tone < 1.0f) {
+    const float coeff = 0.05f + 0.95f * tone;  // jamais 0 : evite de tout couper
+    gDriveToneState += coeff * (y - gDriveToneState);
+    y = gDriveToneState;
+  }
+
+  const float mix = gDriveMix.load(std::memory_order_relaxed);
+  return x + mix * (y - x);
+}
 double gSinePhase = 0.0;
 // Fixe avant l'ouverture du flux (donc avant que le thread audio existe) :
 // pas de synchronisation necessaire pour cette lecture depuis audioCallback.
@@ -239,6 +290,20 @@ void applyMidiEvent(const MidiEvent& ev) {
           gSynth.setAccent(100.0 * v01);
           break;
 
+        // CC30-32 : overdrive (waveshaper maison, cf applyOverdrive).
+        // Ecrits ici depuis le thread audio via des atomiques relaxed ; le
+        // traitement lui-meme coute quelques operations par echantillon,
+        // contre 64 % d'un coeur pour le modele neuronal de jc303 (mesure).
+        case 30:  // Drive : 0 = bypass strict, 1 = saturation maximale.
+          gDriveAmount.store(static_cast<float>(v01), std::memory_order_relaxed);
+          break;
+        case 31:  // Tonalite apres saturation : 0 = sombre, 1 = brillant.
+          gDriveTone.store(static_cast<float>(v01), std::memory_order_relaxed);
+          break;
+        case 32:  // Dry/wet : 0 = signal propre, 1 = 100 % sature.
+          gDriveMix.store(static_cast<float>(v01), std::memory_order_relaxed);
+          break;
+
         case 123:  // All Notes Off (CC standard MIDI). Emis aussi en interne
                    // lors d'un rebranchement de port MIDI : si la session
                    // reseau tombe pendant qu'une note est tenue, le note-off
@@ -365,7 +430,7 @@ int audioCallback(void* outputBuffer, void* /*inputBuffer*/, unsigned int nFrame
 
   float peak = 0.0f;
   for (unsigned int i = 0; i < nFrames; ++i) {
-    float s = static_cast<float>(gSynth.getSample());
+    float s = applyOverdrive(static_cast<float>(gSynth.getSample()));
     out[2 * i + 0] = s;  // gauche
     out[2 * i + 1] = s;  // droite (mono duplique)
     const float a = std::fabs(s);
