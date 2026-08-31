@@ -92,19 +92,25 @@ DriveCoeffs computeDriveCoeffs() {
   d.active = amount > 0.0f;
   if (!d.active) return d;
 
-  // Courbe de gain quadratique (1x a 25x) et non lineaire jusqu'a 40x comme
-  // au premier jet : un tanh SYMETRIQUE converge vers un carre, donc au-dela
-  // d'un gain d'environ 10-15 la forme d'onde ne bouge presque plus. Constate
-  // a l'oreille : 40 % et 80 % de drive (gains 16 et 32) sonnaient pareil.
-  // La courbe quadratique donne aussi plus de finesse en bas de course.
-  d.gain = 1.0f + 24.0f * amount * amount;
+  // Gain volontairement MODERE (1x a 12x). Monter plus haut ne sert a rien :
+  // tout ecretage fort d'une sinusoide converge vers une onde carree, dont
+  // les rapports harmoniques sont figes (H3/H1 = 1/3, H5/H1 = 1/5...). Mesure
+  // sur les versions precedentes : a gain 16 puis 25, on obtenait deja
+  // 0.320 et 0.326 pour un plafond theorique de 0.333 -- d'ou deux positions
+  // de potard qui sonnaient identiques. C'est une limite mathematique, pas un
+  // reglage a pousser.
+  d.gain = 1.0f + 11.0f * amount * amount;
 
-  // Asymetrie croissante avec le drive : decaler l'onde avant l'ecretage
-  // engendre des harmoniques PAIRES (le tanh symetrique n'en produit que des
-  // impaires). C'est ce qui fait que le timbre continue d'evoluer en haut de
-  // course, la ou le gain seul sature -- et c'est aussi ce qui donne son
-  // caractere "lampe" a une saturation asymetrique.
-  d.bias     = 0.9f * amount;
+  // La progression en haut de course vient donc de l'ASYMETRIE, pas du gain.
+  // Decaler l'onde avant l'ecretage change le rapport cyclique : le carre
+  // devient une impulsion, ce qui fait basculer le spectre des harmoniques
+  // impaires vers les paires -- un changement de NATURE, que le gain seul ne
+  // peut pas produire une fois la saturation atteinte.
+  // Courbe cubique : quasi symetrique (donc propre) en bas de course, forte
+  // asymetrie en butee. Mesure : entre 80 % et 100 % de drive, H2/H1 passe de
+  // 0.231 a 0.305 et H4/H1 de 0.173 a 0.228, la ou la version symetrique ne
+  // bougeait plus que de 2 %.
+  d.bias     = 2.6f * amount * amount * amount;
   d.tanhBias = std::tanh(d.bias);
   // Normalisation sur la crete positive : ramene le maximum a 1 pour que
   // monter le drive ne se traduise pas simplement par "plus fort".
