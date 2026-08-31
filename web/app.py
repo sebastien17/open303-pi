@@ -167,6 +167,10 @@ def midi_port_label(name):
     pour l'affichage du port configure/actif dans le bloc STATUS."""
     if not name:
         return ""
+    if name == "@usb":
+        return "USB only"
+    if name == "@network":
+        return "WiFi only"
     return "WiFi (rtpmidid)" if "Midi Through" in name else f"USB: {name}"
 
 
@@ -225,6 +229,13 @@ def read_current_config():
     m = re.search(r'--midi-port\s+"([^"]*)"', extra_args)
     if m:
         midi_port = m.group(1)
+    # Le menu du formulaire melange deux choses dans un seul champ : soit un
+    # MODE (--midi-source usb|network), soit un PORT precis (--midi-port).
+    # On les represente ici par les valeurs sentinelles "@usb"/"@network",
+    # ce qui evite d'ajouter un second menu pour un choix mutuellement exclusif.
+    m = re.search(r"--midi-source\s+(usb|network)", extra_args)
+    if m:
+        midi_port = "@" + m.group(1)
     return channel, audio_device, midi_port
 
 
@@ -290,7 +301,9 @@ def apply():
 
     if not DEVICE_NAME_RE.match(audio_device):
         abort(400, "Invalid device name.")
-    if not DEVICE_NAME_RE.match(midi_port):
+    # Les sentinelles de mode ne sont pas des noms de port : elles sont
+    # validees separement, contre une liste fermee.
+    if midi_port not in ("@usb", "@network") and not DEVICE_NAME_RE.match(midi_port):
         abort(400, "Invalid MIDI port name.")
 
     extra_args = ""
@@ -304,7 +317,9 @@ def apply():
         extra_args += f"--channel {channel} "
     if audio_device:
         extra_args += f'--audio-device "{audio_device}" '
-    if midi_port:
+    if midi_port in ("@usb", "@network"):
+        extra_args += f"--midi-source {midi_port[1:]} "
+    elif midi_port:
         extra_args += f'--midi-port "{midi_port}" '
 
     subprocess.run(

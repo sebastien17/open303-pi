@@ -422,6 +422,13 @@ void printUsage(const char* progName) {
       "                   Sans correspondance, repli sur la selection\n"
       "                   automatique avec avertissement. Par defaut : le\n"
       "                   premier port qui n'est pas \"Midi Through\".\n"
+      "  --midi-source S  Politique de choix quand --midi-port n'est pas donne :\n"
+      "                   auto (defaut) = controleur USB si present, sinon\n"
+      "                   session reseau ; usb = uniquement un controleur\n"
+      "                   materiel ; network = uniquement une session rtpmidid.\n"
+      "                   Utile parce qu'un port USB n'existe que si l'appareil\n"
+      "                   est branche : le mode reste valable et prend effet au\n"
+      "                   branchement (topologie resondee toutes les 400 ms).\n"
       "  --list-midi-ports Affiche les ports MIDI disponibles et quitte.\n"
       "  --meter          Affiche le niveau crete de la sortie audio toutes les\n"
       "                   200 ms. Diagnostic : distingue \"le moteur ne produit\n"
@@ -452,7 +459,15 @@ void printUsage(const char* progName) {
 // verbose == false : selection silencieuse, utilisee par la surveillance
 // periodique de la topologie ALSA (cf boucle principale) qui tourne toutes
 // les 2 s et ne doit pas inonder les logs.
-int pickMidiPort(RtMidiIn& midiin, const std::string& preferredSubstring = "", bool verbose = true) {
+// Politique de selection quand aucun port precis n'est impose (--midi-port).
+// Utile parce qu'un port USB n'existe QUE si un controleur est branche : on ne
+// peut donc pas le choisir a l'avance par son nom. Choisir un MODE permet de
+// dire "prends l'USB des qu'il arrive", la surveillance de topologie (toutes
+// les 400 ms) faisant le reste au branchement.
+enum class MidiSource { Auto, Usb, Network };
+
+int pickMidiPort(RtMidiIn& midiin, const std::string& preferredSubstring = "",
+                 MidiSource source = MidiSource::Auto, bool verbose = true) {
   unsigned int nPorts = midiin.getPortCount();
   if (nPorts == 0) {
     if (verbose) {
@@ -527,11 +542,25 @@ int pickMidiPort(RtMidiIn& midiin, const std::string& preferredSubstring = "", b
       hardwareMatch = static_cast<int>(i);
     }
   }
-  if (hardwareMatch >= 0) return hardwareMatch;
-  if (newestNetworkPeer >= 0) return newestNetworkPeer;
-  // Rien d'autre que "Midi Through"/rtpmidid : on s'y connecte quand meme
-  // (position du premier port "Midi Through" trouve), au cas ou un logiciel
-  // MIDI local ou une session reseau y enverrait des evenements via ALSA.
+  switch (source) {
+    case MidiSource::Usb:
+      // On ignore volontairement le reseau : l'utilisateur veut son
+      // controleur materiel. S'il n'est pas encore branche, on tombe sur
+      // "Midi Through" plus bas (inerte mais valide) et la surveillance de
+      // topologie basculera dessus des qu'il apparait.
+      if (hardwareMatch >= 0) return hardwareMatch;
+      break;
+    case MidiSource::Network:
+      // Symetrique : on ignore un eventuel controleur USB branche.
+      if (newestNetworkPeer >= 0) return newestNetworkPeer;
+      break;
+    case MidiSource::Auto:
+      if (hardwareMatch >= 0) return hardwareMatch;
+      if (newestNetworkPeer >= 0) return newestNetworkPeer;
+      break;
+  }
+  // Repli commun : "Midi Through". Rien d'autre d'utilisable, ou le mode
+  // demande n'a pas (encore) de candidat.
   for (unsigned int i = 0; i < nPorts; ++i) {
     if (midiin.getPortName(i).find("Midi Through") != std::string::npos) {
       return static_cast<int>(i);
@@ -626,6 +655,7 @@ int main(int argc, char** argv) {
   bool showMeter = false;
   std::string meterFile;
   std::string midiPortFilter;
+  MidiSource midiSource = MidiSource::Auto;
 
   // Args positionnels (sampleRate, bufferFrames) et flags (--xxx) sont
   // distingues explicitement : sans ca, "open303_pi_host --sine" envoyait
@@ -667,6 +697,21 @@ int main(int argc, char** argv) {
         return 1;
       }
       midiPortFilter = argv[i];
+    } else if (std::strcmp(argv[i], "--midi-source") == 0) {
+      if (++i >= argc) {
+        std::fprintf(stderr, "--midi-source attend: auto | usb | network\n");
+        return 1;
+      }
+      if (std::strcmp(argv[i], "auto") == 0) {
+        midiSource = MidiSource::Auto;
+      } else if (std::strcmp(argv[i], "usb") == 0) {
+        midiSource = MidiSource::Usb;
+      } else if (std::strcmp(argv[i], "network") == 0) {
+        midiSource = MidiSource::Network;
+      } else {
+        std::fprintf(stderr, "--midi-source invalide: %s (attendu: auto|usb|network)\n", argv[i]);
+        return 1;
+      }
     } else if (std::strcmp(argv[i], "--list-midi-ports") == 0) {
       listMidiPorts = true;
     } else if (std::strcmp(argv[i], "--meter") == 0) {
@@ -766,7 +811,7 @@ int main(int argc, char** argv) {
 
   // --- Ouverture du port MIDI USB ---
   RtMidiIn midiin;
-  int portIndex = pickMidiPort(midiin, midiPortFilter);
+  int portIndex = pickMidiPort(midiin, midiPortFilter, midiSource);
   if (portIndex < 0) return 1;
   midiin.openPort(portIndex);
   midiin.setCallback(&handleMidiMessage);
@@ -884,7 +929,7 @@ int main(int argc, char** argv) {
     if (++pollTicks < kPollEveryTicks) continue;
     pollTicks = 0;
 
-    const int desired = pickMidiPort(midiin, midiPortFilter, /*verbose=*/false);
+    const int desired = pickMidiPort(midiin, midiPortFilter, midiSource, /*verbose=*/false);
     if (desired < 0) continue;  // plus aucun port : on garde l'abonnement actuel
     const std::string desiredName = midiin.getPortName(static_cast<unsigned int>(desired));
     if (desired == currentPortIndex && desiredName == currentPortName) continue;

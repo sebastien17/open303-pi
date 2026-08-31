@@ -15,7 +15,7 @@ EXTRA_ARGS="${1:-}"
 # d'arriver ici, ce script tourne en root via sudo -- on ne fait pas
 # confiance a l'appelant seul. N'accepte que la forme exacte attendue.
 if [[ -n "$EXTRA_ARGS" ]]; then
-  if ! [[ "$EXTRA_ARGS" =~ ^(--channel\ [0-9]{1,2})?\ ?(--audio-device\ \"[A-Za-z0-9 _.:()-]{0,100}\")?\ ?(--midi-port\ \"[A-Za-z0-9 _.:()-]{0,100}\")?$ ]]; then
+  if ! [[ "$EXTRA_ARGS" =~ ^(--channel\ [0-9]{1,2})?\ ?(--audio-device\ \"[A-Za-z0-9 _.:()-]{0,100}\")?\ ?((--midi-port\ \"[A-Za-z0-9 _.:()-]{0,100}\")|(--midi-source\ (auto|usb|network)))?$ ]]; then
     echo "Argument EXTRA_ARGS rejete (format inattendu): $EXTRA_ARGS" >&2
     exit 1
   fi

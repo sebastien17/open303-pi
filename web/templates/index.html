@@ -192,11 +192,21 @@
       </select>
 
       <label for="midi_port">midi input (usb or rtpmidid/wifi)</label>
+      {# Deux familles de choix dans un seul menu : des MODES (qui restent
+         valables meme si l'appareil n'est pas encore branche) puis les ports
+         reellement presents a cet instant. Un port USB n'existe que si le
+         controleur est connecte, d'ou l'interet du mode "USB only". #}
       <select name="midi_port" id="midi_port">
-        <option value="" {{ "selected" if not midi_port }}>auto (prefers a real USB controller)</option>
-        {% for p in midi_ports %}
-        <option value="{{ p.value }}" {{ "selected" if p.value == midi_port }}>{{ p.label }}</option>
-        {% endfor %}
+        <option value="" {{ "selected" if not midi_port }}>auto (USB if present, else WiFi)</option>
+        <option value="@usb" {{ "selected" if midi_port == "@usb" }}>USB only (waits for a controller)</option>
+        <option value="@network" {{ "selected" if midi_port == "@network" }}>WiFi only (rtpmidid)</option>
+        {% if midi_ports %}
+        <optgroup label="ports currently present">
+          {% for p in midi_ports %}
+          <option value="{{ p.value }}" {{ "selected" if p.value == midi_port }}>{{ p.label }}</option>
+          {% endfor %}
+        </optgroup>
+        {% endif %}
       </select>
 
       <label for="audio_device">audio output device</label>
