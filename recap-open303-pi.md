@@ -468,6 +468,32 @@ fonctionne : PC → RTP-MIDI → rtpmidid → ALSA → open303 → audio USB.
     est facultatif : le Digitakt peut se brancher **directement en USB sur le Pi**, cas d'usage
     d'origine du projet.
 
+## Comparaison du DSP avec jc303 (plugin VST/LV2/CLAP basé sur Open303)
+
+47. **C'est littéralement le même moteur.** Diff des 41 fichiers DSP de `midilab/jc303` contre les
+    nôtres (en neutralisant CRLF/LF) : **34 identiques au bit près**, dont tout le cœur du son —
+    `rosic_Open303.cpp`, `rosic_TeeBeeFilter.*`, `rosic_BlendOscillator`, enveloppes, filtres, FFT.
+    Le son du Pi et celui de jc303 sortent donc du même code.
+48. **Nos deux patches ne sont PAS dans jc303** — ils embarquent les bugs amont d'origine :
+    - `idle = false;` (la vraie logique toujours en commentaire) → la chaîne suréchantillonnée ×4
+      tourne en permanence même sans note. Invisible sur un CPU de bureau, principal poste de
+      charge sur le Pi 3B+ ;
+    - `prototypeTable[tableLength]` → le dépassement de 32 octets est toujours là.
+49. **Un point où ILS étaient en avance, repris chez nous** : `generateMipMap()` déclarait ses
+    buffers de travail en `static` (`spectrum[2048]`, indices `t`/`i`), donc **partagés entre
+    instances et appels** — fonction non réentrante et non thread-safe. Ne se manifestait pas ici
+    (instance unique, et jamais appelée depuis le thread audio puisque les setters qui la
+    déclenchent sont volontairement hors mapping CC), mais corrigé quand même : coût nul, 16 Ko
+    de pile hors chemin temps réel.
+50. **Autres écarts, sans portée sonore** : `#include <climits>` en dur chez eux (nous : `-include
+    climits` via CMake), un `#if defined _MSC_VER` pour Visual Studio, et des espaces en fin de
+    ligne.
+
+    Leur valeur ajoutée est ailleurs : interface graphique, overdrive à modèles d'ampli
+    (`guitarml-byod`, hors Open303), et empaquetage multi-format. **Pas de séquenceur pas-à-pas**
+    contrairement à ce que laissait entendre la section 10 du README — c'est chez eux une entrée
+    de feuille de route, corrigé depuis.
+
 ## Reste à faire
 
 - Valider avec un **vrai pair réseau musical** (iPad, DAW...) plutôt que le client Python de test.

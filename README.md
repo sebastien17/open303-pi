@@ -570,7 +570,16 @@ Package obsolete depuis Debian trixie, remplace par `linux-cpupower`/
 
 - **Sequenceur interne / arpegiateur** : le TB-303 original a un
   sequenceur pas-a-pas ; ce projet se contente de jouer les notes recues en
-  direct. Si vous voulez le pattern-sequencer, regardez plutot le projet
-  `jc303` (github.com/midilab/jc303), qui embarque Open303 dans un plugin
-  LV2/VST/CLAP complet avec GUI — hebergeable sur Pi via un hote LV2 leger
-  comme `jalv` + JACK, si vous preferez ne pas coder l'integration vous-meme.
+  direct. Le moteur contient bien une classe `AcidSequencer`, mais elle n'est
+  pas utilisee ici (sequenceur MIDI externe). A noter : `jc303` **n'a pas non
+  plus** de sequenceur pas-a-pas a ce jour (c'est une entree de sa feuille de
+  route), donc ce n'est pas une solution toute faite pour ce besoin.
+
+- **`jc303`** (github.com/midilab/jc303) : le meme moteur `rosic::Open303`
+  empaquete en plugin LV2/VST2/VST3/CLAP/AU avec interface graphique et un
+  overdrive a modeles d'ampli. Diff verifie : **34 des 41 fichiers DSP sont
+  identiques aux notres**, le son vient donc du meme code. Deux nuances :
+  jc303 embarque encore les deux bugs amont corriges ici (flag `idle` jamais
+  reactive, `prototypeTable` trop court), et ne publie pas de binaire arm64 —
+  il faudrait le compiler pour l'utiliser sur le Pi. Hebergeable via un hote
+  LV2 leger comme `jalv` + JACK.

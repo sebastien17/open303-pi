@@ -136,9 +136,18 @@ void MipMappedWaveTable::renderWaveform()
 
 void MipMappedWaveTable::generateMipMap()
 {
-  static double spectrum[tableLength];
-  //static int    position, offset;
-  static int t, i; // indices for the table and position
+  // PATCH (aligne sur jc303, qui a corrige ca de son cote) : ces variables
+  // etaient declarees "static", donc PARTAGEES entre toutes les instances et
+  // tous les appels. generateMipMap() en devenait non reentrante et non
+  // thread-safe : deux instances de Open303 (ou deux appels concurrents)
+  // s'ecrasaient mutuellement le spectre en cours de calcul.
+  // Ici une seule instance existe et la fonction n'est jamais appelee depuis
+  // le thread audio (les setters qui la declenchent -- tanh/phase carree --
+  // sont volontairement hors mapping CC, cf applyMidiEvent), donc le bug ne
+  // se manifeste pas ; on le corrige quand meme, le cout etant nul.
+  // 2048 doubles = 16 Ko de pile, sans probleme hors thread temps reel.
+  double spectrum[tableLength];
+  int t, i; // indices for the table and position
 
   //position = 0;             // begin of the 1st table (index 0)
   //offset   = tableLength+4; // offset between tow tables, the 4 is the number
