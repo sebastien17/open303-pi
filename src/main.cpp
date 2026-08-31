@@ -73,30 +73,65 @@ std::atomic<float> gDriveMix{1.0f};     // 0 = dry, 1 = 100 % sature
 // thread audio.
 float gDriveToneState = 0.0f;
 
+// Coefficients derives des trois parametres, recalcules UNE FOIS PAR BLOC
+// (et non par echantillon) : les atomiques ne sont lues qu'une fois, et les
+// tanh de normalisation sortent de la boucle interne.
+struct DriveCoeffs {
+  bool  active;
+  float gain;
+  float bias;
+  float tanhBias;
+  float norm;
+  float toneCoeff;  // < 1 => filtrage actif
+  float mix;
+};
+
+DriveCoeffs computeDriveCoeffs() {
+  DriveCoeffs d;
+  const float amount = gDriveAmount.load(std::memory_order_relaxed);
+  d.active = amount > 0.0f;
+  if (!d.active) return d;
+
+  // Courbe de gain quadratique (1x a 25x) et non lineaire jusqu'a 40x comme
+  // au premier jet : un tanh SYMETRIQUE converge vers un carre, donc au-dela
+  // d'un gain d'environ 10-15 la forme d'onde ne bouge presque plus. Constate
+  // a l'oreille : 40 % et 80 % de drive (gains 16 et 32) sonnaient pareil.
+  // La courbe quadratique donne aussi plus de finesse en bas de course.
+  d.gain = 1.0f + 24.0f * amount * amount;
+
+  // Asymetrie croissante avec le drive : decaler l'onde avant l'ecretage
+  // engendre des harmoniques PAIRES (le tanh symetrique n'en produit que des
+  // impaires). C'est ce qui fait que le timbre continue d'evoluer en haut de
+  // course, la ou le gain seul sature -- et c'est aussi ce qui donne son
+  // caractere "lampe" a une saturation asymetrique.
+  d.bias     = 0.9f * amount;
+  d.tanhBias = std::tanh(d.bias);
+  // Normalisation sur la crete positive : ramene le maximum a 1 pour que
+  // monter le drive ne se traduise pas simplement par "plus fort".
+  d.norm = 1.0f / (std::tanh(d.gain + d.bias) - d.tanhBias);
+
+  const float tone = gDriveTone.load(std::memory_order_relaxed);
+  d.toneCoeff = (tone < 1.0f) ? (0.05f + 0.95f * tone) : 1.0f;
+  d.mix       = gDriveMix.load(std::memory_order_relaxed);
+  return d;
+}
+
 // Applique la saturation a un echantillon. Renvoie l'entree telle quelle
 // quand le drive est a zero, pour que "overdrive eteint" soit un bypass
 // strict et non une approximation.
-inline float applyOverdrive(float x) {
-  const float amount = gDriveAmount.load(std::memory_order_relaxed);
-  if (amount <= 0.0f) return x;
+inline float applyOverdrive(float x, const DriveCoeffs& d) {
+  if (!d.active) return x;
 
-  // Gain d'attaque : 1x a 40x. La compensation en sortie evite que monter le
-  // drive ne se traduise surtout par "plus fort" (le piege classique, deja
-  // rencontre en testant --tanh-drive).
-  const float gain = 1.0f + 39.0f * amount;
-  float y = std::tanh(x * gain) / std::tanh(gain);
+  float y = (std::tanh(x * d.gain + d.bias) - d.tanhBias) * d.norm;
 
   // Tonalite : passe-bas 1 pole pour adoucir les harmoniques hautes que la
   // saturation vient de creer. tone=1 laisse passer tel quel.
-  const float tone = gDriveTone.load(std::memory_order_relaxed);
-  if (tone < 1.0f) {
-    const float coeff = 0.05f + 0.95f * tone;  // jamais 0 : evite de tout couper
-    gDriveToneState += coeff * (y - gDriveToneState);
+  if (d.toneCoeff < 1.0f) {
+    gDriveToneState += d.toneCoeff * (y - gDriveToneState);
     y = gDriveToneState;
   }
 
-  const float mix = gDriveMix.load(std::memory_order_relaxed);
-  return x + mix * (y - x);
+  return x + d.mix * (y - x);
 }
 double gSinePhase = 0.0;
 // Fixe avant l'ouverture du flux (donc avant que le thread audio existe) :
@@ -428,9 +463,12 @@ int audioCallback(void* outputBuffer, void* /*inputBuffer*/, unsigned int nFrame
     return 0;
   }
 
+  // Une seule lecture des atomiques et des tanh de normalisation par bloc.
+  const DriveCoeffs drive = computeDriveCoeffs();
+
   float peak = 0.0f;
   for (unsigned int i = 0; i < nFrames; ++i) {
-    float s = applyOverdrive(static_cast<float>(gSynth.getSample()));
+    float s = applyOverdrive(static_cast<float>(gSynth.getSample()), drive);
     out[2 * i + 0] = s;  // gauche
     out[2 * i + 1] = s;  // droite (mono duplique)
     const float a = std::fabs(s);
