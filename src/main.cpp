@@ -106,15 +106,25 @@ DriveCoeffs computeDriveCoeffs() {
   // devient une impulsion, ce qui fait basculer le spectre des harmoniques
   // impaires vers les paires -- un changement de NATURE, que le gain seul ne
   // peut pas produire une fois la saturation atteinte.
-  // Courbe cubique : quasi symetrique (donc propre) en bas de course, forte
-  // asymetrie en butee. Mesure : entre 80 % et 100 % de drive, H2/H1 passe de
-  // 0.231 a 0.305 et H4/H1 de 0.173 a 0.228, la ou la version symetrique ne
-  // bougeait plus que de 2 %.
-  d.bias     = 2.6f * amount * amount * amount;
+  // Courbe quadratique, volontairement moderee. Une version plus agressive
+  // (2.6*a^3) a ete essayee : elle ecrasait l'alternance positive a 0.01 en
+  // butee, produisant une impulsion filiforme, maigre et plus faible
+  // (fondamentale a 0.566 contre 0.813). Ici l'onde garde du corps tout en
+  // s'asymetrisant : entre 70 % et 100 % de drive, H2/H1 va de 0.097 a 0.114,
+  // H3/H1 de 0.235 a 0.287 et H4/H1 de 0.061 a 0.096 -- l'evolution se
+  // poursuit jusqu'en butee, sans degenerer.
+  d.bias     = 0.8f * amount * amount;
   d.tanhBias = std::tanh(d.bias);
-  // Normalisation sur la crete positive : ramene le maximum a 1 pour que
-  // monter le drive ne se traduise pas simplement par "plus fort".
-  d.norm = 1.0f / (std::tanh(d.gain + d.bias) - d.tanhBias);
+  // Normalisation sur la plus grande des DEUX cretes. Ne considerer que la
+  // positive (premiere version) faisait exploser l'alternance negative des
+  // que le bias montait : pour une entree +/-0.5, la sortie atteignait -6.3 a
+  // 70 % de drive, -24 a 85 %, -181 a 100 %. Tout cela etait ecrete
+  // brutalement par la carte son, si bien que les positions hautes du potard
+  // sonnaient toutes pareil -- non par limite harmonique, mais parce
+  // qu'elles produisaient la meme bouillie saturee.
+  const float peakPos = std::fabs(std::tanh(d.gain + d.bias) - d.tanhBias);
+  const float peakNeg = std::fabs(std::tanh(-d.gain + d.bias) - d.tanhBias);
+  d.norm = 1.0f / std::fmax(peakPos, peakNeg);
 
   const float tone = gDriveTone.load(std::memory_order_relaxed);
   d.toneCoeff = (tone < 1.0f) ? (0.05f + 0.95f * tone) : 1.0f;
