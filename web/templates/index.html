@@ -151,6 +151,7 @@
     line-height: 1.5;
   }
   .cc-notes b { color: var(--fg); }
+  .cc-notes code { color: var(--fg-bright); }
   .cc-notes p { margin: 8px 0 0; }
   .qr-footer {
     display: block;
@@ -238,9 +239,9 @@
 
         <tr class="grp"><td colspan="3">extended ("back panel")</td></tr>
         <tr><td>20</td><td>filter attack, normal notes</td><td>0.3 - 30 ms</td></tr>
-        <tr><td>21</td><td>filter attack, accented notes</td><td>0.3 - 30 ms</td></tr>
+        <tr><td>21</td><td>filter attack, accented notes</td><td>0.3 - 30 ms <span class="note">(very slight)</span></td></tr>
         <tr><td>22</td><td>highpass before filter</td><td>0 - 500 Hz</td></tr>
-        <tr><td>23</td><td>highpass in feedback loop</td><td>0 - 500 Hz <span class="note">(subtle)</span></td></tr>
+        <tr><td>23</td><td>highpass in feedback loop</td><td>0 - 500 Hz <span class="note">(all the action is low down)</span></td></tr>
         <tr><td>24</td><td>highpass after filter</td><td>0 - 500 Hz</td></tr>
         <tr><td>25</td><td>amp sustain</td><td>-60 - 0 dB</td></tr>
         <tr><td>26</td><td>amp decay</td><td>16 - 3000 ms</td></tr>
@@ -262,8 +263,16 @@
         <p><b>gotchas:</b> CC25 at 0 is -60 dB sustain, i.e. the original 303's
         percussive envelope &mdash; setting the whole extended block to 0 makes the
         synth nearly silent. CC73 has no effect on accented notes (their decay is
-        fixed at 200 ms). CC23 stays subtle by design: it runs at the x4
-        oversampled rate, so it only ever filters a fraction of a percent.</p>
+        fixed at 200 ms). CC23 is the opposite of subtle &mdash; it has the largest
+        measured effect of the whole map, because it guts the resonance &mdash; but
+        nearly all of it happens in the first few Hz, so the rest of the sweep
+        feels flat.</p>
+
+        <p><b>strongest / weakest,</b> measured on the real engine
+        (<code>tools/cc_impact.cpp</code>, min vs max): <b>CC23</b> moves RMS most
+        (-0.54), <b>CC71</b> changes brightness most, <b>CC70</b> changes timbre
+        most (H2/H1 -0.34). <b>CC21</b> is the only faint one, about ten times
+        weaker than CC20. Everything else is clearly audible.</p>
         <p><b>overdrive:</b> a tanh soft-clipper, <i>not</i> a port of jc303's amp
         models &mdash; those run an LSTM per sample, measured here at 64&nbsp;% of one
         core, which a 64-frame buffer cannot afford. CC30 at 0 is an exact bypass.</p>

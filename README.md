@@ -252,16 +252,25 @@ Pi 4/5. Quelques ajustements par rapport au reste du guide :
 collision avec un usage standard), cf commentaires dans `applyMidiEvent()`
 (`src/main.cpp`) pour le detail de chaque plage.
 
-> **CC23 (highpass de feedback) : effet intrinsequement tenu.** Ce filtre
-> tourne a l'interieur de `TeeBeeFilter`, donc au taux **sur-echantillonne
-> x4** (176,4 kHz pour une sortie a 44,1 kHz). Comme `OnePoleFilter` calcule
-> `x = exp(-2*pi*fc/sampleRate)`, la part du signal reellement filtree
-> (~`1-x`) reste minuscule : 0,05 % a 15 Hz, 0,21 % a 60 Hz, 0,53 % a 150 Hz,
-> 1,77 % a 500 Hz. A l'oreille on ne distingue donc qu'un saut entre 0 Hz
-> (filtre inactif) et le premier palier, sans progression ensuite.
+> **CC23 (highpass de feedback) : tres puissant, mais non progressif.**
+> Mesure sur le signal reel (`tools/cc_impact.cpp`) : c'est **le plus fort
+> effet de tout le mapping** (RMS -0,54 entre min et max), parce qu'il detruit
+> la resonance. En revanche la quasi-totalite de cet effet se joue dans les
+> tout premiers hertz, d'ou l'impression de potard "mort" au-dela.
+>
+> La raison : ce filtre tourne dans `TeeBeeFilter`, donc au taux
+> **sur-echantillonne x4** (176,4 kHz pour une sortie a 44,1 kHz). Comme
+> `OnePoleFilter` calcule `x = exp(-2*pi*fc/sampleRate)`, la fraction filtree
+> (~`1-x`) reste petite et croit tres lentement : 0,05 % a 15 Hz, 0,21 % a
+> 60 Hz, 0,53 % a 150 Hz, 1,77 % a 500 Hz.
+>
 > **Ne pas "corriger" ca en resserrant la plage** : essaye en 0-150 puis
 > 0-60 Hz, ca divise l'effet maximal par 3 puis par 8 sans rien gagner en
 > progressivite. La plage large 0-500 Hz est conservee volontairement.
+>
+> (Une version precedente de cette note affirmait que l'effet etait
+> "intrinsequement tenu" -- c'etait faux, et l'erreur venait d'une analyse
+> menee sur une sinusoide au lieu du signal reel du moteur.)
 
 `setSquarePhaseShift`, `setTanhShaperDrive` et `setTanhShaperOffset` sont
 **volontairement absents de tout mapping CC** : ils regenerent la wavetable
