@@ -92,14 +92,19 @@ DriveCoeffs computeDriveCoeffs() {
   d.active = amount > 0.0f;
   if (!d.active) return d;
 
-  // Gain volontairement MODERE (1x a 12x). Monter plus haut ne sert a rien :
-  // tout ecretage fort d'une sinusoide converge vers une onde carree, dont
-  // les rapports harmoniques sont figes (H3/H1 = 1/3, H5/H1 = 1/5...). Mesure
-  // sur les versions precedentes : a gain 16 puis 25, on obtenait deja
-  // 0.320 et 0.326 pour un plafond theorique de 0.333 -- d'ou deux positions
-  // de potard qui sonnaient identiques. C'est une limite mathematique, pas un
-  // reglage a pousser.
-  d.gain = 1.0f + 11.0f * amount * amount;
+  // Gain plafonne a 6.5x, valeur choisie d'apres une mesure sur le SIGNAL
+  // REEL du moteur (tools/overdrive_probe.cpp) et non sur une sinusoide.
+  // Deux enseignements de cette mesure, invisibles autrement :
+  //  - la sortie du 303 est DEJA tres riche en harmoniques sans overdrive
+  //    (H2/H1 = 0.425 a drive nul) : la saturation ne fait donc que decaler
+  //    des rapports deja eleves, d'ou un effet bien moins spectaculaire que
+  //    sur une sinusoide pure ;
+  //  - c'est la densite (RMS) qui s'entend le plus, et elle saturait des 70 %
+  //    de course avec un gain de 12x (+0.073 puis +0.023 puis +0.010) : le
+  //    dernier tiers du potard ne servait a rien.
+  // A 6.5x, le RMS progresse de 0.121 a 0.317 de facon nettement plus reguliere
+  // sur toute la course.
+  d.gain = 1.0f + 5.5f * amount * amount;
 
   // La progression en haut de course vient donc de l'ASYMETRIE, pas du gain.
   // Decaler l'onde avant l'ecretage change le rapport cyclique : le carre
